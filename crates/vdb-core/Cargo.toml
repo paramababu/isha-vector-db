@@ -1,0 +1,16 @@
+[package]
+name = "vdb-core"
+description = "Core engine for an embedded, offline-first vector database. Platform-independent: performs no I/O of its own."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+# Intentionally empty. See docs/adr/README.md ADR-0004 and docs/architecture/02-technology.md §2.4.
+# Any addition here requires an ADR and will be flagged by .github/workflows/ci-core-purity.yml.
+
+[lints]
+workspace = true

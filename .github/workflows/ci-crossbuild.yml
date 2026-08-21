@@ -1,0 +1,43 @@
+name: ci-crossbuild
+
+# Every platform we claim to support must at least compile on every pull request.
+# A platform that is not in CI is officially unsupported (docs/architecture/11 §11.2, R1).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - aarch64-linux-android
+          - armv7-linux-androideabi
+          - x86_64-unknown-linux-gnu
+          - wasm32-unknown-unknown
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup target add ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      # The engine crates must build for every target. Backends that are inherently
+      # platform-specific are excluded per target as they are added.
+      - run: cargo build -p vdb-core -p vdb-storage-memory --target ${{ matrix.target }}
+
+  apple:
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [aarch64-apple-ios, aarch64-apple-ios-sim, aarch64-apple-darwin]
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup target add ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build -p vdb-core -p vdb-storage-memory --target ${{ matrix.target }}

@@ -1,0 +1,56 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/vdb-core",
+    "crates/vdb-storage-memory",
+    "crates/vdb-testkit",
+]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+rust-version = "1.78"
+license = "Apache-2.0"
+repository = "https://github.com/OWNER/vdb"
+authors = ["vdb contributors"]
+
+[workspace.dependencies]
+vdb-core = { path = "crates/vdb-core", version = "0.0.1" }
+vdb-format = { path = "crates/vdb-format", version = "0.0.1" }
+vdb-index-flat = { path = "crates/vdb-index-flat", version = "0.0.1" }
+vdb-storage-memory = { path = "crates/vdb-storage-memory", version = "0.0.1" }
+vdb-storage-os = { path = "crates/vdb-storage-os", version = "0.0.1" }
+vdb-testkit = { path = "crates/vdb-testkit", version = "0.0.1" }
+
+[workspace.lints.rust]
+missing_debug_implementations = "warn"
+unreachable_pub = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+# The rules from docs/architecture/02-technology.md §2.4, mechanically enforced.
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+indexing_slicing = "warn"
+todo = "deny"
+unimplemented = "deny"
+dbg_macro = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+
+# Mobile: size over speed. Used by scripts/build-native.sh.
+[profile.mobile]
+inherits = "release"
+opt-level = "z"
+
+[profile.bench]
+inherits = "release"
+debug = true

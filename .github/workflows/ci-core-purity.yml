@@ -1,0 +1,20 @@
+name: ci-core-purity
+
+# The mechanical guarantee behind "the core is platform-independent".
+# See docs/architecture/03-system-design.md §3.1 and scripts/check-core-purity.sh.
+#
+# This is a required check with no admin bypass: it is precisely the gate people are tempted to
+# skip under deadline pressure, and the one whose breach is hardest to unwind later.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  purity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Core performs no I/O, forbids unsafe, has no dependencies
+        run: ./scripts/check-core-purity.sh

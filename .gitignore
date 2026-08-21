@@ -1,0 +1,8 @@
+/target
+**/*.rs.bk
+Cargo.lock.orig
+.DS_Store
+*.profraw
+/benchmarks/results/local/
+node_modules/
+firebase-debug.log
