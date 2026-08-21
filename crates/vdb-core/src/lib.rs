@@ -24,10 +24,17 @@
 )]
 #![warn(missing_docs)]
 
+pub mod document;
 pub mod error;
+pub mod metadata;
 pub mod path;
 pub mod storage;
 pub mod util;
+pub mod validation;
+pub mod vector;
 
+pub use document::{DocId, Document, DocumentInput, IdKind, Include, RowId};
 pub use error::{DbError, ErrorCode, Recoverability, Result};
+pub use metadata::{Metadata, Value};
 pub use path::DbPath;
+pub use vector::{VectorDType, VectorView};

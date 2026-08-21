@@ -1010,6 +1010,88 @@ impl fmt::Display for InternalError {
 
 impl std::error::Error for DbError {}
 
+/// Convert a format-level decode failure into a [`DbError`] with no path attached.
+///
+/// `vdb-format` decodes byte slices and has no concept of a file, so the layer that *does* know
+/// the path is responsible for attaching it — see [`from_format_at`]. This pathless form is for
+/// decoding buffers that never came from a file, such as metadata handed in by a caller.
+pub fn from_format(e: vdb_format::FormatError) -> DbError {
+    from_format_at(e, &DbPath::root())
+}
+
+/// Convert a format-level decode failure, attaching the file it came from.
+pub fn from_format_at(e: vdb_format::FormatError, path: &DbPath) -> DbError {
+    use vdb_format::FormatError as F;
+    match e {
+        F::BadMagic { expected, found } => CorruptionError::BadMagic {
+            path: path.clone(),
+            expected,
+            found,
+        }
+        .into(),
+        F::UnsupportedVersion {
+            found,
+            min_readable,
+            current,
+        } => CorruptionError::UnsupportedFormatVersion {
+            path: path.clone(),
+            found,
+            min_readable,
+            current,
+        }
+        .into(),
+        F::ChecksumMismatch {
+            offset,
+            expected,
+            found,
+        } => CorruptionError::ChecksumMismatch {
+            path: path.clone(),
+            offset,
+            expected,
+            found,
+        }
+        .into(),
+        F::Truncated {
+            offset,
+            needed,
+            available,
+        } => CorruptionError::TruncatedFile {
+            path: path.clone(),
+            expected_len: offset.saturating_add(needed),
+            actual_len: available,
+        }
+        .into(),
+        // A length field that exceeds the input is the condition that turns a naive parser into
+        // an out-of-memory crash, so it keeps its own distinct description rather than being
+        // folded into "truncated".
+        F::LengthExceedsInput {
+            offset,
+            claimed,
+            available,
+        } => CorruptionError::MalformedStructure {
+            path: path.clone(),
+            offset,
+            detail: format!("length field claims {claimed} bytes, {available} available"),
+        }
+        .into(),
+        F::Malformed { offset, kind } => CorruptionError::MalformedStructure {
+            path: path.clone(),
+            offset,
+            detail: kind.to_string(),
+        }
+        .into(),
+        // `FormatError` is #[non_exhaustive] so the format crate can add variants without
+        // breaking us. Anything unrecognised is still corruption, and still reported with the
+        // format crate's own description rather than swallowed.
+        other => CorruptionError::MalformedStructure {
+            path: path.clone(),
+            offset: 0,
+            detail: other.to_string(),
+        }
+        .into(),
+    }
+}
+
 // Convenience constructors for the sub-enums, so call sites read
 // `DbError::from(StorageError::NotFound { .. })` rather than nesting by hand.
 macro_rules! from_sub {

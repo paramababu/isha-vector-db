@@ -28,6 +28,10 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
   nesting; the dual-slot manifest with its crash-safe slot-selection rule; the write-ahead log,
   which distinguishes a torn tail from real corruption and makes batches all-or-nothing; and the
   four segment blocks. Golden fixtures in `testdata/v1/` and six `cargo-fuzz` targets.
+- `vdb-core` data model: `VectorView` (borrowed until the write-ahead log, with both a native
+  `&[f32]` and a raw-bytes variant so bindings copy nothing), `Metadata` with dotted-path lookup
+  and total resolution semantics, `DocId`/`RowId`, `DocumentInput`/`Document`, and the single
+  limits table with validation for collection names, ids, dimensions, `top_k` and batch size.
 - CI: `ci-format` refuses a golden-fixture change without a declared `FORMAT-CHANGE:` and a
   `FORMAT_VERSION` bump; `nightly` runs each fuzz target for an hour and reports coverage.
 
