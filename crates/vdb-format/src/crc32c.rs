@@ -5,8 +5,9 @@
 //! (SSE4.2 `crc32`, ARMv8 `crc32c`) — leaving the door open to a hardware-accelerated path in
 //! `vdb-storage-os` later without changing a single byte on disk.
 //!
-//! This implementation is a portable, table-driven scalar one. It is deliberately in `vdb-core`,
-//! where `unsafe` is forbidden, so the reference checksum can never be the thing that is wrong.
+//! This implementation is a portable, table-driven scalar one. It lives in `vdb-format`, where
+//! `unsafe` is forbidden, so the reference checksum can never itself be the thing that is
+//! wrong.
 
 /// Reflected Castagnoli polynomial.
 const POLY: u32 = 0x82F6_3B78;
@@ -39,7 +40,7 @@ const TABLE: [u32; 256] = {
 /// Checksum a single buffer.
 ///
 /// ```
-/// # use vdb_core::util::crc32c;
+/// # use vdb_format::crc32c;
 /// assert_eq!(crc32c(b"123456789"), 0xE306_9283);
 /// ```
 pub fn crc32c(data: &[u8]) -> u32 {

@@ -1,0 +1,65 @@
+name: ci-format
+
+# Guards the on-disk format. The bytes in testdata/ are a published contract with data already
+# on users' devices: changing them silently is the one mistake this project cannot recover from.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  golden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Golden fixtures still decode and re-encode identically
+        run: cargo test -p vdb-format --test golden
+
+      - name: A changed fixture requires an explicit FORMAT-CHANGE declaration
+        if: github.event_name == 'pull_request'
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          base="origin/${{ github.base_ref }}"
+          if git diff --quiet "$base"...HEAD -- testdata/; then
+            echo "testdata/ unchanged."
+            exit 0
+          fi
+          echo "testdata/ changed in this PR:"
+          git diff --stat "$base"...HEAD -- testdata/
+          if [[ "$BODY" != *"FORMAT-CHANGE:"* ]]; then
+            echo
+            echo "FAIL: golden fixtures changed but the PR body does not contain 'FORMAT-CHANGE:'."
+            echo "A format change must bump FORMAT_VERSION, ship a migration, and explain itself."
+            exit 1
+          fi
+          echo "FORMAT-CHANGE declared in the PR body."
+
+      - name: FORMAT_VERSION must be bumped alongside a fixture change
+        if: github.event_name == 'pull_request'
+        run: |
+          base="origin/${{ github.base_ref }}"
+          if git diff --quiet "$base"...HEAD -- testdata/; then exit 0; fi
+          if git diff "$base"...HEAD -- crates/vdb-format/src/lib.rs | grep -q 'FORMAT_VERSION'; then
+            echo "FORMAT_VERSION touched."
+          else
+            echo "FAIL: testdata/ changed but FORMAT_VERSION did not."
+            exit 1
+          fi
+
+  fuzz-build:
+    # Building the targets on every PR catches a decoder whose signature changed without its
+    # fuzz target being updated — otherwise it is discovered by the nightly run, days later.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install nightly --profile minimal
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo install cargo-fuzz --locked
+      - run: cargo +nightly fuzz build
+        working-directory: crates/vdb-format

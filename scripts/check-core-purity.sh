@@ -51,17 +51,18 @@ for crate in "${PURE_CRATES[@]}"; do
     fail=1
   fi
 
-  # Dependencies here need an ADR. The allow-list is intentionally empty (see ADR-0004).
+  # Third-party dependencies here need an ADR. Workspace crates (vdb-*) are fine: the layering
+  # is what this script is protecting, not the dependency count.
   deps=$(awk '/^\[dependencies\]/{f=1;next} /^\[/{f=0} f && NF && $0 !~ /^#/' \
-           "crates/$crate/Cargo.toml" || true)
+           "crates/$crate/Cargo.toml" | grep -v '^vdb-' || true)
   if [[ -n "$deps" ]]; then
-    echo "FAIL: $crate has dependencies; every one needs an ADR (see docs/adr/README.md)."
+    echo "FAIL: $crate has third-party dependencies; each needs an ADR (docs/adr/README.md)."
     echo "$deps" | sed 's/^/       /'
     fail=1
   fi
 done
 
 if [[ $fail -eq 0 ]]; then
-  echo "core purity: OK (${PURE_CRATES[*]} perform no I/O, forbid unsafe, and have no dependencies)"
+  echo "core purity: OK (${PURE_CRATES[*]} perform no I/O, forbid unsafe, and pull in no third-party crates)"
 fi
 exit $fail

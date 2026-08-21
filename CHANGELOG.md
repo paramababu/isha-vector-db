@@ -23,7 +23,16 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
 - CI: formatting, clippy at deny-warnings, a stable and MSRV test matrix across three operating
   systems, cross-compilation to Android, iOS, macOS and wasm32, and the core-purity guard.
 
+- `vdb-format`: on-disk format **version 1**. A 32-byte self-checksumming header on every file;
+  a canonical metadata value codec that rejects unsorted keys, non-minimal varints and hostile
+  nesting; the dual-slot manifest with its crash-safe slot-selection rule; the write-ahead log,
+  which distinguishes a torn tail from real corruption and makes batches all-or-nothing; and the
+  four segment blocks. Golden fixtures in `testdata/v1/` and six `cargo-fuzz` targets.
+- CI: `ci-format` refuses a golden-fixture change without a declared `FORMAT-CHANGE:` and a
+  `FORMAT_VERSION` bump; `nightly` runs each fuzz target for an hour and reports coverage.
+
 ### Notes
 
-- Storage format: not yet defined. Nothing persists.
+- Storage format version 1 is defined but **not frozen**: it may still change without migration
+  support until 0.1.
 - The public API is not stable and will change without notice before 0.1.

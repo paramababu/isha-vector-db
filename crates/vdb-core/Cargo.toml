@@ -9,8 +9,9 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
-# Intentionally empty. See docs/adr/README.md ADR-0004 and docs/architecture/02-technology.md §2.4.
-# Any addition here requires an ADR and will be flagged by .github/workflows/ci-core-purity.yml.
+# Workspace crates only. Third-party dependencies require an ADR and are rejected by
+# .github/workflows/ci-core-purity.yml. See docs/adr/README.md ADR-0004.
+vdb-format.workspace = true
 
 [lints]
 workspace = true

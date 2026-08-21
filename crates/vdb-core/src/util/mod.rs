@@ -5,8 +5,10 @@
 //! somewhere else.
 
 pub mod bitmap;
-pub mod crc32c;
-pub mod varint;
 
 pub use bitmap::Bitmap;
-pub use crc32c::{crc32c, Crc32c};
+
+// Checksums and varints are properties of the on-disk format, not of the engine, so they live
+// in `vdb-format` — which must stay usable by migration tooling without linking the engine.
+// Re-exported here because the engine's persistence layer uses them constantly.
+pub use vdb_format::{crc32c, varint, Crc32c};

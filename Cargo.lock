@@ -5,6 +5,13 @@ version = 3
 [[package]]
 name = "vdb-core"
 version = "0.0.1"
+dependencies = [
+ "vdb-format",
+]
+
+[[package]]
+name = "vdb-format"
+version = "0.0.1"
 
 [[package]]
 name = "vdb-storage-memory"

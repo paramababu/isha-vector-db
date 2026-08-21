@@ -2,9 +2,12 @@
 resolver = "2"
 members = [
     "crates/vdb-core",
+    "crates/vdb-format",
     "crates/vdb-storage-memory",
     "crates/vdb-testkit",
 ]
+
+exclude = ["crates/vdb-format/fuzz"]
 
 [workspace.package]
 version = "0.0.1"
