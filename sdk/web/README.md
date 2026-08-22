@@ -42,7 +42,20 @@ the mapping is recovered on reload without a separate index to keep consistent.
 Set `slots` to comfortably exceed the number of files your database will hold; running out raises
 an error naming the pool rather than failing obscurely.
 
-`adapters/node.js` is a second adapter over `node:fs`, used to test this stack without a browser.
+`adapters/indexeddb.js` is the fallback for browsers where OPFS is unavailable — older Safari,
+and private browsing modes where the origin private filesystem is restricted. IndexedDB has no
+synchronous API at all, not even inside a Worker, so there is no arrangement of handles that
+makes it answer a synchronous read. Instead the whole database is held in memory and IndexedDB is
+where it is *kept*: 64 KiB blocks written back in the background, so a small change to a large
+segment rewrites one block rather than the file.
+
+Two consequences worth knowing before choosing it. **The database must fit in memory** —
+`bytesResident()` reports where you are against that. And **durability is weaker again than
+OPFS**: a write the engine considers flushed is in memory and queued, and `flush()` returns a
+promise that resolves only once the queue has drained. The adapter also drains on `pagehide` and
+when the page becomes hidden, which covers the ways a tab normally goes away, but not a crash.
+
+`adapters/node.js` is a third adapter over `node:fs`, used to test this stack without a browser.
 It is not a supported way to run vdb on a server — use the native addon in `sdk/node`, which has
 no WebAssembly boundary.
 
@@ -59,10 +72,11 @@ writes, search, deletes, reopening from persisted bytes, structured errors, slot
 across a remount, and pool exhaustion. The Rust side adds the 25-check storage conformance suite
 and a full engine test against the same backend.
 
-**Real OPFS is verified too**, in a headless Chromium: `test/browser.html` runs the engine in a
-Worker against genuine sync access handles, writes twenty documents, searches, deletes, and then
-reloads the page and finds the data still there. Serve this directory over HTTP and open it —
-OPFS needs a secure context.
+**Both browser backends are verified in a headless Chromium.** `test/browser.html` runs the
+engine in a Worker against genuine OPFS sync access handles, and `test/browser-idb.html` does the
+same against real IndexedDB; each writes twenty documents, searches, deletes, then reloads the
+page and finds the data still there. Serve this directory over HTTP and open them — OPFS needs a
+secure context. CI does not run these; they need a browser, and the Node job does not have one.
 
 That check earned its keep immediately. The first version ran on the main thread and failed with
 `handle.createSyncAccessHandle is not a function`, because that method exists **only** on a

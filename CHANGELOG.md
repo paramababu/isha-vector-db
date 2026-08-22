@@ -96,6 +96,13 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
   **real OPFS in a headless browser**, writing, searching, deleting and then reloading the page
   to confirm the data survived.
 
+  **The IndexedDB fallback** ADR-0010 called for is also built and browser-verified, for older
+  Safari and private-browsing modes where OPFS is restricted. IndexedDB has no synchronous API at
+  all, so the whole database is resident in memory and written back in 64 KiB blocks — the block
+  device the architecture document specifies. Durability is weaker again than OPFS: `flush()`
+  resolves when the write-back queue drains, and the adapter also drains on `pagehide` and when
+  the page is hidden.
+
   That browser check found something the Node suite structurally could not.
   `createSyncAccessHandle()` exists **only** on a Worker thread, and the first version of the
   page ran on the main thread and failed with "is not a function". A stand-in written from the

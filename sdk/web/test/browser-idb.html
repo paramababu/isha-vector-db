@@ -1,0 +1,39 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>vdb — IndexedDB verification</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 2rem; max-width: 48rem; }
+  .ok::before { content: "PASS "; color: #15803d; font-weight: 600; }
+  .fail::before { content: "FAIL "; color: #b91c1c; font-weight: 600; }
+</style>
+<h1>vdb on IndexedDB</h1>
+<p>
+  The IndexedDB fallback, for browsers where OPFS is unavailable — older Safari, and private
+  browsing modes where the origin private filesystem is restricted. IndexedDB has no synchronous
+  API at all, so the whole database is held in memory and written back in 64 KiB blocks; this
+  page checks that the write-back actually persists.
+</p>
+<p>Reload after the first run: the second run must find the database still there.</p>
+<div id="out"></div>
+<script type="module">
+  const out = document.getElementById('out');
+  const log = (ok, text) => {
+    const p = document.createElement('p');
+    p.className = ok ? 'ok' : 'fail';
+    p.textContent = text;
+    out.append(p);
+  };
+
+  const worker = new Worker(new URL('./worker-idb.js', import.meta.url), { type: 'module' });
+  worker.addEventListener('message', ({ data }) => {
+    if (data.kind === 'result') log(data.ok, data.text);
+    if (data.kind === 'done') {
+      document.body.dataset.finished = 'true';
+      worker.terminate();
+    }
+  });
+  worker.addEventListener('error', (e) => {
+    log(false, `worker failed to start: ${e.message}`);
+    document.body.dataset.finished = 'true';
+  });
+</script>
