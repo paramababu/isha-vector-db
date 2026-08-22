@@ -1,0 +1,17 @@
+//! The public API: what a user of this library touches.
+//!
+//! Everything below this module is an implementation detail. The types here are the ones the
+//! C ABI wraps and every SDK mirrors, so their shape is a contract long before 1.0 — a change
+//! here is six changes once the bindings exist.
+
+mod batch;
+mod collection;
+mod config;
+mod database;
+mod stats;
+
+pub use batch::{BatchOp, BatchReport, WriteBatch};
+pub use collection::{Collection, Snapshot, UpsertOutcome};
+pub use config::{CollectionSpec, DatabaseConfig};
+pub use database::{CollectionInfo, Database};
+pub use stats::{CollectionStats, DatabaseStats};

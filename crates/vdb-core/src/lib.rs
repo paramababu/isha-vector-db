@@ -24,6 +24,8 @@
 )]
 #![warn(missing_docs)]
 
+pub mod api;
+pub mod clock;
 pub mod document;
 pub mod error;
 pub mod metadata;
@@ -35,6 +37,11 @@ pub mod validation;
 pub mod vector;
 pub mod write;
 
+pub use api::{
+    BatchReport, Collection, CollectionInfo, CollectionSpec, CollectionStats, Database,
+    DatabaseConfig, DatabaseStats, Snapshot, UpsertOutcome, WriteBatch,
+};
+pub use clock::{Clock, ManualClock};
 pub use document::{DocId, Document, DocumentInput, IdKind, Include, RowId};
 pub use error::{DbError, ErrorCode, Recoverability, Result};
 pub use metadata::{Metadata, Value};

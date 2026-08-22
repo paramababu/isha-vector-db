@@ -46,6 +46,11 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
   cross-file row-count consistency checks.
 - The crash sweep extended over the full write → flush → commit → checkpoint cycle, asserting
   both that recovery lands on a legal state and that the database stays usable afterwards.
+- **Public API**: `Database` (open/close, create/open/drop/list collections, flush, stats) and
+  `Collection` (insert/upsert/delete/get/contains/count/ids, atomic `write_batch`, flush,
+  stats), plus `DatabaseConfig`/`CollectionSpec` builders, `WriteBatch`, and an injected
+  `Clock`. Reads and writes go through the log before becoming visible, and the memtable
+  auto-flushes at a configurable threshold.
 - CI: `ci-format` refuses a golden-fixture change without a declared `FORMAT-CHANGE:` and a
   `FORMAT_VERSION` bump; `nightly` runs each fuzz target for an hour and reports coverage.
 

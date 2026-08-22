@@ -57,12 +57,35 @@ Nothing at or below the public API knows which platform it is on. That is enforc
 | Data model: vectors, metadata, documents, ids, limits | Done |
 | Write path: memtable, WAL, replay, crash-sweep suite | Done |
 | Segment flush, manifest commit, full reopen | Done |
-| `Database`/`Collection` public API | Next |
+| `Database`/`Collection` public API, CRUD, batches | Done |
+| `vdb-index-flat`, metrics, top-K search | Next |
 | `vdb-index-flat`, search, filters | Not started |
 | `vdb-storage-os` | Not started |
 | C ABI, SDKs, HNSW, web | Later phases |
 
 Roadmap and ordering: [docs/architecture/11-roadmap-risks-order.md](docs/architecture/11-roadmap-risks-order.md).
+
+## Building
+
+```rust
+use std::sync::Arc;
+use vdb_core::{Database, DatabaseConfig, CollectionSpec, DocumentInput, ManualClock};
+use vdb_core::vector::VectorView;
+use vdb_storage_memory::MemoryStorage;
+
+let db = Database::open(
+    Arc::new(MemoryStorage::new()),   // or the OS backend, once it lands
+    DatabaseConfig::default(),
+    Arc::new(ManualClock::default()),
+)?;
+
+let docs = db.create_collection(CollectionSpec::new("docs", 4, Metric::Cosine))?;
+docs.insert(DocumentInput::new("a", VectorView::f32(&[1.0, 0.0, 0.0, 0.0])))?;
+assert_eq!(docs.count()?, 1);
+db.close()?;
+```
+
+Search is not implemented yet — that is the next step.
 
 ## Building
 
