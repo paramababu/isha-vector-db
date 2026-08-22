@@ -100,16 +100,37 @@ of conjuncts does not approach the depth limit.
 ## What filtering costs
 
 A filtered scan reads each candidate's metadata before scoring it, so a filtered-out document
-costs a metadata decode rather than a distance computation. That is the right trade for a flat
-scan: the decode is cheaper than the dot product at any realistic dimension, and the filter is
-tested before the expensive part.
+costs a metadata decode instead of a distance computation.
 
-Two optimisations are designed for and not yet built, because neither helps a flat scan:
+**Today that is a bad trade, and the benchmarks say so.** A filter passing 10% of documents makes
+a search *slower*, not faster, despite scoring one tenth as many vectors:
 
-- **A row bitmap** built before the scan, for a very selective filter. It saves memory traffic
-  for an approximate index that would otherwise traverse into regions it must then discard.
-- **Secondary field indexes**, so a filter over an indexed field never decodes metadata at all.
-  `Filter::referenced_fields()` exists to feed that decision.
+| corpus | unfiltered p50 | filtered p50 | ratio |
+|---|---|---|---|
+| 5,000 docs × 128 dims | 0.37 ms | 1.67 ms | 4.5× slower |
+| 50,000 docs × 384 dims | 12.5 ms | 18.9 ms | 1.5× slower |
 
-`SearchStats` reports `considered` and `skipped`, which together tell you a filter's selectivity —
-and therefore whether a scan is doing far more work than its results justify.
+The decode dominates: every candidate allocates a fresh map and a string per field. The ratio
+does improve with dimension — the distance computation the filter avoids grows while the decode
+does not — but it has not crossed over even at 384 dimensions.
+
+An earlier version of this document asserted the opposite, on the reasonable-sounding grounds
+that a decode must be cheaper than a distance computation. Measuring it showed that is only true
+at high dimensions, and by a smaller margin than expected. The claim is corrected here rather
+than quietly deleted, because the reasoning that produced it is the kind anyone would find
+plausible.
+
+The fix is known and not yet built, and is now a measured priority rather than a speculative one:
+
+- **Decode only the fields a filter references.** `Filter::referenced_fields()` already reports
+  them; the metadata record needs a field offset table so they can be reached without decoding
+  the rest. This is the change that closes most of the gap.
+- **A row bitmap** built before the scan, for a very selective filter, so an approximate index
+  does not traverse into regions it must then discard.
+- **Secondary field indexes**, so a filter over an indexed field never touches metadata at all.
+
+Until then: a filter is for correctness — getting the right documents — not for speed. If you
+are filtering to make a search *faster*, it currently will not.
+
+`SearchStats` reports `considered` and `skipped`, which together give a filter's selectivity, and
+therefore how much work a scan is doing for the results it returns.

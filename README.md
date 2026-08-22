@@ -62,7 +62,8 @@ Nothing at or below the public API knows which platform it is on. That is enforc
 | Metadata filters | Done |
 | `vdb-storage-os`: the real filesystem backend | Done |
 | Compaction, verification, `vdb` CLI | Done |
-| Benchmarks, then SIMD kernels, then the C ABI | Next |
+| Benchmark harness and committed baseline | Done |
+| SIMD kernels, then the C ABI | Next |
 | `vdb-index-flat`, search, filters | Not started |
 | `vdb-storage-os` | Not started |
 | C ABI, SDKs, HNSW, web | Later phases |
@@ -132,6 +133,30 @@ cargo run -p vdb-cli -- get     /tmp/vdb-demo products doc-0999
 `stats`, `inspect`, `verify` and `get` open read-only and take no lock, so they work on a
 database an application currently has open. `verify` exits `3` when it finds damage, distinct
 from `1` for "could not run", so a script can tell the difference.
+
+## Performance
+
+Measured, not asserted — see [benchmarks/](benchmarks/README.md) for the method and
+[benchmarks/results/](benchmarks/results/) for committed baselines.
+
+At 50,000 documents × 384 dimensions, on an Apple M-series laptop:
+
+| workload | result |
+|---|---|
+| insert, one at a time | 35,300/s |
+| search, k=10 | p50 12.5 ms, p99 13.0 ms |
+| get by id | p50 750 ns |
+| cold open | 33.7 ms |
+| storage overhead | 4.6% above the raw vectors |
+
+**These are a reference point on one machine, not a claim about performance in general.** Mobile
+numbers must come from mobile hardware and do not exist yet. The scan is memory-bandwidth-bound
+and the scalar kernel leaves a factor of two to four unused — that is what the SIMD work is for,
+and it now has a number to beat.
+
+One finding worth knowing before you rely on it: **metadata filtering currently makes search
+slower, not faster.** The details and the fix are in
+[docs/api/filters.md](docs/api/filters.md#what-filtering-costs).
 
 ## Contributing
 

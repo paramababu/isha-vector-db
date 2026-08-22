@@ -81,6 +81,10 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
   so it works on a database an application has open; distinct exit codes for damage versus
   failure to run.
 - `Storage::describe` so errors name the actual location rather than the backend's type name.
+- **Benchmark harness** (`vdb-bench`) with a committed baseline in `benchmarks/results/`.
+  Clustered rather than uniform data, queries drawn from the corpus, documented percentile
+  convention, and a refusal to write JSON from a debug build. Measures insert, search, filtered
+  search, id lookup, cold open, recovery, compaction, storage amplification and peak memory.
 - CI: `ci-format` refuses a golden-fixture change without a declared `FORMAT-CHANGE:` and a
   `FORMAT_VERSION` bump; `nightly` runs each fuzz target for an hour and reports coverage.
 

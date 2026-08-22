@@ -302,7 +302,11 @@ pub struct SegmentData {
     dtype: VectorDType,
     dimension: u32,
     vec_bytes: Vec<u8>,
-    meta_bytes: Vec<u8>,
+    /// The metadata file's *payload*, header and trailer already stripped.
+    ///
+    /// Stored pre-opened because a filtered scan reads one record per candidate row, and
+    /// re-validating the file header on each of them showed up plainly in the benchmarks.
+    meta_payload: Vec<u8>,
     entries: Vec<RowEntry>,
     ids: Vec<DocId>,
     by_id: HashMap<DocId, u32>,
@@ -320,6 +324,11 @@ impl SegmentData {
         let vec_bytes = require(storage, name, seg.id, SegmentFile::Vectors)?;
         let dir_bytes = require(storage, name, seg.id, SegmentFile::Directory)?;
         let meta_bytes = require(storage, name, seg.id, SegmentFile::Metadata)?;
+        let meta_path = layout::segment_file(name, seg.id, SegmentFile::Metadata)?;
+        let meta_payload = MetaBlock::open(&meta_bytes)
+            .map_err(|e| from_format_at(e, &meta_path))?
+            .payload()
+            .to_vec();
         let del_bytes = require(storage, name, seg.id, SegmentFile::Tombstones)?;
 
         let dir_path = layout::segment_file(name, seg.id, SegmentFile::Directory)?;
@@ -378,7 +387,7 @@ impl SegmentData {
             dtype: catalog.dtype,
             dimension: catalog.dimension,
             vec_bytes,
-            meta_bytes,
+            meta_payload,
             entries,
             ids,
             by_id,
@@ -467,9 +476,7 @@ impl SegmentData {
         if entry.meta_len == 0 {
             return Ok(MetaRecord::default());
         }
-        let block =
-            MetaBlock::open(&self.meta_bytes).map_err(|e| from_format_at(e, &DbPath::root()))?;
-        block
+        MetaBlock::from_payload(&self.meta_payload)
             .record(entry)
             .map_err(|e| from_format_at(e, &DbPath::root()))
     }
@@ -516,9 +523,7 @@ impl SegmentData {
         if entry.meta_len == 0 {
             return Ok(Metadata::new());
         }
-        let block =
-            MetaBlock::open(&self.meta_bytes).map_err(|e| from_format_at(e, &DbPath::root()))?;
-        let record = block
+        let record = MetaBlock::from_payload(&self.meta_payload)
             .record(entry)
             .map_err(|e| from_format_at(e, &DbPath::root()))?;
         match record.metadata {
@@ -549,9 +554,7 @@ impl SegmentData {
         let mut metadata = Metadata::new();
         let mut content = None;
         if include.metadata || include.content {
-            let block = MetaBlock::open(&self.meta_bytes)
-                .map_err(|e| from_format_at(e, &DbPath::root()))?;
-            let record = block
+            let record = MetaBlock::from_payload(&self.meta_payload)
                 .record(entry)
                 .map_err(|e| from_format_at(e, &DbPath::root()))?;
             if include.metadata {

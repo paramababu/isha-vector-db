@@ -1,0 +1,175 @@
+{
+  "format": 1,
+  "engine_version": "0.0.1",
+  "scale": "50000docs-384d",
+  "documents": 50000,
+  "dimension": 384,
+  "target": "aarch64-macos",
+  "measurements": [
+    {
+      "name": "insert_single",
+      "unit": "doc",
+      "count": 50000,
+      "total_ms": 1487.995,
+      "per_second": 33602.3,
+      "p50_us": 11.9,
+      "p95_us": 21.2,
+      "p99_us": 26.5,
+      "notes": {
+        "warmup_iterations": "50",
+        "durability": "batch",
+        "dimension": "384"
+      }
+    },
+    {
+      "name": "flush",
+      "unit": "doc",
+      "count": 50000,
+      "total_ms": 33.873,
+      "per_second": 1476100.1,
+      "notes": {
+        "bytes_on_disk": "80300753"
+      }
+    },
+    {
+      "name": "search_k1",
+      "unit": "query",
+      "count": 500,
+      "total_ms": 6300.013,
+      "per_second": 79.4,
+      "p50_us": 12554.0,
+      "p95_us": 12915.5,
+      "p99_us": 12976.2,
+      "notes": {
+        "warmup_iterations": "25",
+        "documents": "50000",
+        "dimension": "384"
+      }
+    },
+    {
+      "name": "search_k10",
+      "unit": "query",
+      "count": 500,
+      "total_ms": 6255.234,
+      "per_second": 79.9,
+      "p50_us": 12524.9,
+      "p95_us": 12796.8,
+      "p99_us": 12946.0,
+      "notes": {
+        "warmup_iterations": "25",
+        "documents": "50000",
+        "dimension": "384"
+      }
+    },
+    {
+      "name": "search_k100",
+      "unit": "query",
+      "count": 500,
+      "total_ms": 6333.932,
+      "per_second": 78.9,
+      "p50_us": 12684.5,
+      "p95_us": 12961.0,
+      "p99_us": 13140.9,
+      "notes": {
+        "warmup_iterations": "25",
+        "documents": "50000",
+        "dimension": "384"
+      }
+    },
+    {
+      "name": "search_k10_filtered_10pct",
+      "unit": "query",
+      "count": 500,
+      "total_ms": 9437.642,
+      "per_second": 53.0,
+      "p50_us": 18941.3,
+      "p95_us": 19373.6,
+      "p99_us": 19581.6,
+      "notes": {
+        "warmup_iterations": "25",
+        "considered": "5000",
+        "skipped": "45000",
+        "dimension": "384"
+      }
+    },
+    {
+      "name": "get_by_id",
+      "unit": "lookup",
+      "count": 500,
+      "total_ms": 0.437,
+      "per_second": 1143400.7,
+      "p50_us": 0.8,
+      "p95_us": 1.5,
+      "p99_us": 3.1,
+      "notes": {
+        "warmup_iterations": "25"
+      }
+    },
+    {
+      "name": "cold_open",
+      "unit": "database",
+      "count": 1,
+      "total_ms": 33.680,
+      "per_second": 29.7,
+      "notes": {
+        "documents": "50000",
+        "dimension": "384"
+      }
+    },
+    {
+      "name": "storage_footprint",
+      "unit": "bytes",
+      "count": 80300753,
+      "total_ms": 0.000,
+      "notes": {
+        "raw_vector_bytes": "76800000",
+        "amplification": "1.046x",
+        "bytes_per_document": "1606"
+      }
+    },
+    {
+      "name": "insert_batched_1000",
+      "unit": "doc",
+      "count": 50000,
+      "total_ms": 1238.562,
+      "per_second": 40369.4,
+      "notes": {
+        "batch_size": "1000",
+        "durability": "batch"
+      }
+    },
+    {
+      "name": "recovery_open",
+      "unit": "database",
+      "count": 1,
+      "total_ms": 33.755,
+      "per_second": 29.6,
+      "notes": {
+        "documents_replayed": "20000",
+        "wal_bytes": "31396619"
+      }
+    },
+    {
+      "name": "compaction_70pct_dead",
+      "unit": "row",
+      "count": 20000,
+      "total_ms": 68.877,
+      "per_second": 290371.6,
+      "notes": {
+        "rows_reclaimed": "14000",
+        "bytes_before": "31423666",
+        "bytes_after": "9427492",
+        "bytes_reclaimed": "21996174"
+      }
+    },
+    {
+      "name": "peak_memory",
+      "unit": "bytes",
+      "count": 429178880,
+      "total_ms": 0.000,
+      "notes": {
+        "caveat": "peak for the whole process, not a steady-state reading"
+      }
+    }
+  ]
+}

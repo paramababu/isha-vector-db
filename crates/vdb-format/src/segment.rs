@@ -612,6 +612,19 @@ impl<'a> MetaBlock<'a> {
         })
     }
 
+    /// Wrap an already-extracted payload.
+    ///
+    /// A caller that reads a segment once and then serves many rows from it — which is every
+    /// filtered scan — should not re-validate the file header per row.
+    pub fn from_payload(payload: &'a [u8]) -> Self {
+        Self { payload }
+    }
+
+    /// The raw payload, for a caller that wants to hold it directly.
+    pub fn payload(&self) -> &'a [u8] {
+        self.payload
+    }
+
     /// Verify the file's checksum.
     ///
     /// # Errors
