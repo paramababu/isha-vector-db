@@ -3,7 +3,6 @@
 <title>vdb — OPFS verification</title>
 <style>
   body { font: 14px/1.5 system-ui, sans-serif; margin: 2rem; max-width: 48rem; }
-  pre { background: #f4f4f5; padding: 1rem; overflow-x: auto; }
   .ok::before { content: "PASS "; color: #15803d; font-weight: 600; }
   .fail::before { content: "FAIL "; color: #b91c1c; font-weight: 600; }
 </style>
@@ -13,12 +12,14 @@
   browser can answer: whether real <code>FileSystemSyncAccessHandle</code> behaves the way the
   adapter assumes. Serve this directory over HTTP and open it — OPFS needs a secure context.
 </p>
-<p>Reload the page after the first run: the second run must find the database still there.</p>
+<p>
+  The work happens in <a href="worker.js">a Worker</a>, because
+  <code>createSyncAccessHandle()</code> does not exist on the main thread. That is the supported
+  way to run this SDK, so the worker doubles as the usage example.
+</p>
+<p>Reload after the first run: the second run must find the database still there.</p>
 <div id="out"></div>
 <script type="module">
-  import { load, Metric } from '../src/vdb.js';
-  import { opfsAdapter } from '../src/adapters/opfs.js';
-
   const out = document.getElementById('out');
   const log = (ok, text) => {
     const p = document.createElement('p');
@@ -26,45 +27,17 @@
     p.textContent = text;
     out.append(p);
   };
-  const check = (ok, text) => { log(!!ok, text); if (!ok) throw new Error(text); };
 
-  try {
-    check(typeof FileSystemSyncAccessHandle !== 'undefined' || 'storage' in navigator,
-      'OPFS is available');
-
-    const adapter = await opfsAdapter('vdb-browser-check', { slots: 64 });
-    const vdb = await load(fetch('../vdb.wasm'), adapter);
-    check(vdb.abiVersion === 1, `ABI version is 1 (got ${vdb.abiVersion})`);
-    log(true, `format version ${vdb.formatVersion}, library ${vdb.version}`);
-
-    const db = vdb.open('/db');
-    const docs = db.collection('docs', 4, Metric.Cosine);
-
-    const before = docs.count();
-    log(true, `documents already present: ${before}`);
-
-    for (let i = 0; i < 20; i++) docs.upsert(`doc-${i}`, [i, 1, 0, -1]);
-    docs.flush();
-    check(docs.count() >= 20, `at least 20 documents after writing (got ${docs.count()})`);
-
-    const hits = docs.search([19, 1, 0, -1], 3);
-    check(hits[0].id === 'doc-19', `nearest neighbour is doc-19 (got ${hits[0].id})`);
-    check(hits[0].score >= hits[1].score, 'scores descend');
-
-    check(docs.delete('doc-0') === true, 'delete reports it existed');
-    check(docs.has('doc-0') === false, 'the deleted document is gone');
-
-    db.close();
-    vdb.dispose();
-    adapter.close();
-
-    log(true, before > 0
-      ? 'Persistence confirmed: this run found data written by a previous one.'
-      : 'First run complete. Reload to confirm the data persisted.');
-  } catch (e) {
-    log(false, `${e.name}: ${e.message}`);
-    const pre = document.createElement('pre');
-    pre.textContent = e.stack ?? '';
-    out.append(pre);
-  }
+  const worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
+  worker.addEventListener('message', ({ data }) => {
+    if (data.kind === 'result') log(data.ok, data.text);
+    if (data.kind === 'done') {
+      document.body.dataset.finished = 'true';
+      worker.terminate();
+    }
+  });
+  worker.addEventListener('error', (e) => {
+    log(false, `worker failed to start: ${e.message}`);
+    document.body.dataset.finished = 'true';
+  });
 </script>

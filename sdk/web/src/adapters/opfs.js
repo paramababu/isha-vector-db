@@ -13,12 +13,17 @@
 // without a separate index file to keep consistent. SQLite's OPFS VFS solves the same problem
 // the same way, for the same reason.
 //
+// # Worker only
+//
+// `createSyncAccessHandle()` exists only on a Worker thread — on the main thread the method is
+// simply absent, and this adapter fails immediately with "is not a function". That is not a
+// limitation of this code; it is the platform, and it is why the SDK asks you to run the engine
+// in a dedicated Worker.
+//
 // # Status
 //
-// **Not verified in a browser.** Everything below the adapter interface — the host marshalling,
-// the wasm module, the engine, the storage backend — is covered by `test/wasm.test.js` and by
-// the Rust conformance suite. This file is the one part that only a browser can exercise, and it
-// has not been. `test/browser.html` is here to do that; run it before relying on this.
+// Verified against real OPFS in Chromium by `test/browser.html`, which writes, searches, deletes
+// and then reloads the page to confirm the data survived.
 
 const HEADER_BYTES = 512;
 const MAGIC = 0x56_44_42_50; // "VDBP"

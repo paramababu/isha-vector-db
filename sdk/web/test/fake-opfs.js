@@ -5,7 +5,9 @@
 // short count at end of file, `truncate` grows with zeroes, and handles are exclusive.
 //
 // This does not make the OPFS adapter "tested in a browser" — a real implementation can differ in
-// ways a hand-written double will agree with by construction. What it does test is everything the
+// ways a hand-written double will agree with by construction. It demonstrably did: this double
+// happily served `createSyncAccessHandle` from the main thread, where the real API does not
+// exist at all, and only `test/browser.html` caught that. What it does test is everything the
 // adapter itself decides: slot assignment, the header format, path-to-slot recovery after a
 // reload, the virtual directory tree, and the listing. Those are the parts most likely to be
 // wrong, and they are wrong in the same way whoever runs it.

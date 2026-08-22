@@ -92,8 +92,15 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
 
   Tested: the 25-check storage conformance suite and a full engine test run against the backend
   natively, through a Rust implementation of the same host imports; 7 JavaScript tests run the
-  real WebAssembly module. **Real OPFS is not covered** — `sdk/web/test/opfs.test.js` uses a
-  stand-in, and `sdk/web/test/browser.html` is the check only a browser can perform.
+  real WebAssembly module; and `sdk/web/test/browser.html` runs the engine in a Worker against
+  **real OPFS in a headless browser**, writing, searching, deleting and then reloading the page
+  to confirm the data survived.
+
+  That browser check found something the Node suite structurally could not.
+  `createSyncAccessHandle()` exists **only** on a Worker thread, and the first version of the
+  page ran on the main thread and failed with "is not a function". A stand-in written from the
+  same assumptions as the adapter agrees with them by construction — including the assumption
+  that the method exists — so no amount of testing against it would have surfaced this.
 
   Two exports outside the C ABI, `vdb_wasm_alloc` and `vdb_wasm_free`: JavaScript cannot allocate
   in the module's linear memory. The header-drift guard now carries a named, self-checking

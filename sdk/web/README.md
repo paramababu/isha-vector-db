@@ -59,10 +59,16 @@ writes, search, deletes, reopening from persisted bytes, structured errors, slot
 across a remount, and pool exhaustion. The Rust side adds the 25-check storage conformance suite
 and a full engine test against the same backend.
 
-**Real OPFS is not covered by any of that.** `test/opfs.test.js` runs against a stand-in that
-implements the specified semantics, which by construction agrees with the adapter's assumptions.
-`test/browser.html` is the check that only a browser can perform: serve this directory over HTTP,
-open it, and reload once to confirm persistence. Run it before relying on OPFS in production.
+**Real OPFS is verified too**, in a headless Chromium: `test/browser.html` runs the engine in a
+Worker against genuine sync access handles, writes twenty documents, searches, deletes, and then
+reloads the page and finds the data still there. Serve this directory over HTTP and open it —
+OPFS needs a secure context.
+
+That check earned its keep immediately. The first version ran on the main thread and failed with
+`handle.createSyncAccessHandle is not a function`, because that method exists **only** on a
+Worker. Nothing in the Node suite could have found it: `test/opfs.test.js` runs against a
+stand-in, and a stand-in written from the same assumptions as the adapter agrees with them by
+construction — including the assumption that the method is there at all.
 
 ## Durability
 
