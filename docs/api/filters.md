@@ -102,35 +102,32 @@ of conjuncts does not approach the depth limit.
 A filtered scan reads each candidate's metadata before scoring it, so a filtered-out document
 costs a metadata decode instead of a distance computation.
 
-**Today that is a bad trade, and the benchmarks say so.** A filter passing 10% of documents makes
-a search *slower*, not faster, despite scoring one tenth as many vectors:
+Only the fields a filter actually names are decoded. A candidate's metadata is left as bytes and
+the named paths are found by walking the encoded map, skipping over everything else — so a filter
+reading one field out of six pays for one.
 
-| corpus | unfiltered p50 | filtered p50 | ratio |
-|---|---|---|---|
-| 5,000 docs × 128 dims | 0.37 ms | 1.67 ms | 4.5× slower |
-| 50,000 docs × 384 dims | 12.5 ms | 18.9 ms | 1.5× slower |
+That was not always true, and the benchmarks are why it changed. Filtering originally decoded
+each candidate's entire metadata, which cost **1.5× to 4.5× more than the distance computation
+the filter was avoiding** — a filter made a search slower, not faster. With the lazy lookup, at
+50,000 documents × 384 dimensions, a filter passing 10% of documents costs 7.3 ms against 6.2 ms
+unfiltered: roughly break-even.
 
-The decode dominates: every candidate allocates a fresh map and a string per field. The ratio
-does improve with dimension — the distance computation the filter avoids grows while the decode
-does not — but it has not crossed over even at 384 dimensions.
+It is still not *faster* than scanning everything, despite scoring a tenth as many rows, because
+the per-candidate lookup costs about what the skipped distance saves.
 
-An earlier version of this document asserted the opposite, on the reasonable-sounding grounds
-that a decode must be cheaper than a distance computation. Measuring it showed that is only true
-at high dimensions, and by a smaller margin than expected. The claim is corrected here rather
-than quietly deleted, because the reasoning that produced it is the kind anyone would find
-plausible.
+An earlier version of this document asserted that a decode must be cheaper than a distance
+computation, on grounds anyone would find plausible. Measuring it showed otherwise. The history
+is left here rather than quietly deleted, because the reasoning is the kind that recurs.
 
-The fix is known and not yet built, and is now a measured priority rather than a speculative one:
+Two further improvements are designed for and not built, and both now have a number to beat:
 
-- **Decode only the fields a filter references.** `Filter::referenced_fields()` already reports
-  them; the metadata record needs a field offset table so they can be reached without decoding
-  the rest. This is the change that closes most of the gap.
-- **A row bitmap** built before the scan, for a very selective filter, so an approximate index
-  does not traverse into regions it must then discard.
+- **A field offset table** in the metadata record, so a lookup is a seek rather than a walk. This
+  is what would make filtering genuinely faster than not filtering.
 - **Secondary field indexes**, so a filter over an indexed field never touches metadata at all.
+  `Filter::referenced_fields()` exists to feed that decision.
 
-Until then: a filter is for correctness — getting the right documents — not for speed. If you
-are filtering to make a search *faster*, it currently will not.
+Until then: filter for correctness. Filtering will not currently make a search faster, though it
+no longer makes it slower.
 
 `SearchStats` reports `considered` and `skipped`, which together give a filter's selectivity, and
 therefore how much work a scan is doing for the results it returns.

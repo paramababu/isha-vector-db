@@ -9,21 +9,59 @@ use core::cmp::Ordering;
 use crate::filter::{Field, Filter};
 use crate::metadata::{Metadata, Value};
 
+/// Where a filter reads fields from.
+///
+/// A memtable row is already decoded; a segment row is bytes. Reading the bytes lazily is what
+/// makes a filtered scan affordable: the benchmarks showed that decoding every candidate's whole
+/// metadata cost more than the distance computation the filter was avoiding.
+#[derive(Debug, Clone, Copy)]
+pub enum Fields<'a> {
+    /// Already in memory.
+    Decoded(&'a Metadata),
+    /// An encoded metadata map, from which only the named fields are decoded.
+    Encoded(&'a [u8]),
+    /// No metadata at all. Every lookup is absent.
+    Empty,
+}
+
+impl Fields<'_> {
+    /// Resolve a dotted path.
+    ///
+    /// Malformed bytes resolve to absent rather than raising. That keeps evaluation total, which
+    /// the whole filter design depends on — and it is not a way of hiding corruption, because
+    /// the checksum over the same bytes is what detects that, and `verify` is what reports it.
+    fn resolve(&self, path: &str) -> Option<Value> {
+        match self {
+            Self::Empty => None,
+            Self::Decoded(m) => m.get_path(path).cloned(),
+            Self::Encoded(bytes) => vdb_format::find_path(bytes, path).ok().flatten(),
+        }
+    }
+}
+
 /// Whether a document's metadata satisfies a filter.
 ///
 /// Assumes the filter has been validated; an over-deep tree would recurse without bound. The
 /// public API validates on the way in, so this is an internal invariant rather than a hazard.
 pub fn matches(filter: &Filter, metadata: &Metadata) -> bool {
+    matches_fields(filter, &Fields::Decoded(metadata))
+}
+
+/// Whether a filter is satisfied by fields from any source.
+///
+/// Assumes the filter has been validated; an over-deep tree would recurse without bound. The
+/// public API validates on the way in, so this is an internal invariant rather than a hazard.
+pub fn matches_fields(filter: &Filter, metadata: &Fields<'_>) -> bool {
     match filter {
         // An empty `And` matches everything and an empty `Or` matches nothing — the identity
         // elements of each operation. Anything else makes `all(vec![])` behave differently from
         // an absent filter, which surprises callers building filters programmatically.
-        Filter::And(children) => children.iter().all(|c| matches(c, metadata)),
-        Filter::Or(children) => children.iter().any(|c| matches(c, metadata)),
-        Filter::Not(child) => !matches(child, metadata),
+        Filter::And(children) => children.iter().all(|c| matches_fields(c, metadata)),
+        Filter::Or(children) => children.iter().any(|c| matches_fields(c, metadata)),
+        Filter::Not(child) => !matches_fields(child, metadata),
 
-        Filter::Eq(field, value) => equals(resolve(metadata, field), value),
-        Filter::Ne(field, value) => !equals(resolve(metadata, field), value),
+        Filter::Eq(field, value) => equals(resolve(metadata, field).as_ref(), value),
+        Filter::Ne(field, value) => !equals(resolve(metadata, field).as_ref(), value),
 
         Filter::Gt(field, value) => ordered(metadata, field, value, |o| o == Ordering::Greater),
         Filter::Gte(field, value) => ordered(metadata, field, value, |o| o != Ordering::Less),
@@ -32,11 +70,11 @@ pub fn matches(filter: &Filter, metadata: &Metadata) -> bool {
 
         Filter::In(field, values) => {
             let actual = resolve(metadata, field);
-            values.iter().any(|v| equals(actual, v))
+            values.iter().any(|v| equals(actual.as_ref(), v))
         }
         Filter::Nin(field, values) => {
             let actual = resolve(metadata, field);
-            !values.iter().any(|v| equals(actual, v))
+            !values.iter().any(|v| equals(actual.as_ref(), v))
         }
 
         Filter::Exists(field) => resolve(metadata, field).is_some(),
@@ -57,8 +95,8 @@ pub fn matches(filter: &Filter, metadata: &Metadata) -> bool {
 }
 
 /// Look a field up, `None` meaning the path does not resolve.
-fn resolve<'a>(metadata: &'a Metadata, field: &Field) -> Option<&'a Value> {
-    metadata.get_path(field.as_str())
+fn resolve(metadata: &Fields<'_>, field: &Field) -> Option<Value> {
+    metadata.resolve(field.as_str())
 }
 
 /// Equality between a resolved field and a filter's value.
@@ -106,12 +144,12 @@ fn same(a: &Value, b: &Value) -> bool {
 
 /// Apply an ordering comparison, false wherever an ordering is not defined.
 fn ordered(
-    metadata: &Metadata,
+    metadata: &Fields<'_>,
     field: &Field,
     expected: &Value,
     accept: impl Fn(Ordering) -> bool,
 ) -> bool {
-    match resolve(metadata, field).and_then(|actual| compare(actual, expected)) {
+    match resolve(metadata, field).and_then(|actual| compare(&actual, expected)) {
         Some(ordering) => accept(ordering),
         // An absent field, a type mismatch, or a type with no natural order: all false. Note
         // that this makes `Gt` and `Lte` both false for such a document, so they are *not*

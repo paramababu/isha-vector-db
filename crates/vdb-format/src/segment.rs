@@ -633,6 +633,56 @@ impl<'a> MetaBlock<'a> {
         verify_block(bytes, FileKind::Metadata)
     }
 
+    /// The encoded metadata map for a row, without decoding it.
+    ///
+    /// What a filtered scan wants: the bytes, so only the fields the filter names get decoded.
+    ///
+    /// # Errors
+    /// [`FormatError::LengthExceedsInput`] if the entry points outside the file.
+    pub fn metadata_bytes(&self, entry: &RowEntry) -> Result<Option<&'a [u8]>> {
+        if entry.meta_len == 0 {
+            return Ok(None);
+        }
+        let slice = self.slice_for(entry)?;
+        let mut r = Reader::new(slice);
+        let flags = r.u8()?;
+        if flags & !0b11 != 0 {
+            return Err(FormatError::Malformed {
+                offset: entry.meta_offset,
+                kind: MalformedKind::UnknownFlags(u16::from(flags)),
+            });
+        }
+        if flags & 1 == 0 {
+            return Ok(None);
+        }
+        Ok(Some(r.blob()?))
+    }
+
+    /// The record's raw bytes within the block.
+    fn slice_for(&self, entry: &RowEntry) -> Result<&'a [u8]> {
+        let start =
+            usize::try_from(entry.meta_offset).map_err(|_| FormatError::LengthExceedsInput {
+                offset: entry.meta_offset,
+                claimed: entry.meta_offset,
+                available: self.payload.len() as u64,
+            })?;
+        let end =
+            start
+                .checked_add(entry.meta_len as usize)
+                .ok_or(FormatError::LengthExceedsInput {
+                    offset: entry.meta_offset,
+                    claimed: u64::from(entry.meta_len),
+                    available: self.payload.len() as u64,
+                })?;
+        self.payload
+            .get(start..end)
+            .ok_or(FormatError::LengthExceedsInput {
+                offset: entry.meta_offset,
+                claimed: end as u64,
+                available: self.payload.len() as u64,
+            })
+    }
+
     /// Read the record a directory entry points at.
     ///
     /// # Errors

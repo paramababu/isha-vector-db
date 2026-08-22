@@ -275,6 +275,121 @@ impl Value {
     }
 }
 
+/// Walk past one encoded value without materialising it.
+///
+/// The point of the whole lazy-lookup path: skipping a 200-byte string costs a bounds-checked
+/// pointer advance, where decoding it costs an allocation and a copy. A filter that reads one
+/// field out of six should pay for one.
+///
+/// # Errors
+/// Any [`FormatError`], with the same strictness as a full decode — a value that cannot be
+/// skipped is one that cannot be trusted.
+pub fn skip_value(r: &mut Reader<'_>) -> Result<()> {
+    skip_at_depth(r, 1)
+}
+
+fn skip_at_depth(r: &mut Reader<'_>, depth: usize) -> Result<()> {
+    if depth > MAX_VALUE_DEPTH {
+        return Err(FormatError::Malformed {
+            offset: r.offset(),
+            kind: MalformedKind::DepthExceeded {
+                max: MAX_VALUE_DEPTH,
+            },
+        });
+    }
+    let at = r.offset();
+    let t = r.u8()?;
+    match t {
+        tag::NULL | tag::FALSE | tag::TRUE => {}
+        tag::I64 => {
+            r.varint()?;
+        }
+        tag::F64 => {
+            r.skip(8)?;
+        }
+        tag::STR | tag::BYTES => {
+            r.blob()?;
+        }
+        tag::ARRAY => {
+            let count_at = r.offset();
+            let count = bounded_count(r.varint()?, r.remaining(), count_at)?;
+            for _ in 0..count {
+                skip_at_depth(r, depth + 1)?;
+            }
+        }
+        tag::MAP => {
+            let count_at = r.offset();
+            let count = bounded_count(r.varint()?, r.remaining() / 2, count_at)?;
+            for _ in 0..count {
+                r.blob()?;
+                skip_at_depth(r, depth + 1)?;
+            }
+        }
+        other => {
+            return Err(FormatError::Malformed {
+                offset: at,
+                kind: MalformedKind::UnknownValueTag(other),
+            })
+        }
+    }
+    Ok(())
+}
+
+/// Decode only the value at a dotted path, skipping everything else.
+///
+/// `bytes` must be an encoded map. Returns `None` when the path does not resolve — a missing
+/// key, or an attempt to descend into a scalar — which is the same total behaviour a full decode
+/// followed by a lookup would give.
+///
+/// Map keys are stored in ascending order, so the scan stops as soon as it passes the key it is
+/// looking for rather than reading to the end.
+///
+/// # Errors
+/// Any [`FormatError`] from malformed input.
+pub fn find_path(bytes: &[u8], path: &str) -> Result<Option<Value>> {
+    if bytes.is_empty() || path.is_empty() {
+        return Ok(None);
+    }
+    let mut r = Reader::new(bytes);
+    let mut segments = path.split('.').peekable();
+
+    loop {
+        let Some(segment) = segments.next() else {
+            return Ok(None);
+        };
+        let at = r.offset();
+        if r.u8()? != tag::MAP {
+            // Not a map, so there is nothing to descend into.
+            let _ = at;
+            return Ok(None);
+        }
+        let count_at = r.offset();
+        let count = bounded_count(r.varint()?, r.remaining() / 2, count_at)?;
+
+        let mut found = false;
+        for _ in 0..count {
+            let key = r.string()?;
+            match key.cmp(segment) {
+                core::cmp::Ordering::Less => skip_value(&mut r)?,
+                core::cmp::Ordering::Equal => {
+                    found = true;
+                    break;
+                }
+                // Keys ascend, so once we are past the target it cannot appear later.
+                core::cmp::Ordering::Greater => return Ok(None),
+            }
+        }
+        if !found {
+            return Ok(None);
+        }
+        if segments.peek().is_none() {
+            return Value::read_from(&mut r).map(Some);
+        }
+        // More path to walk: the reader is now positioned at the nested value, which the next
+        // iteration requires to be a map.
+    }
+}
+
 /// Reject a container count that could not possibly be satisfied by the bytes left.
 ///
 /// Without this, `Vec::with_capacity(count)` on an attacker-chosen count is an out-of-memory
@@ -568,6 +683,133 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn find_path_reads_only_what_it_needs() {
+        let v = map(&[
+            ("alpha", Value::I64(1)),
+            ("bravo", Value::Str("x".repeat(500))),
+            ("charlie", Value::Bool(true)),
+            ("delta", Value::Array(vec![Value::I64(1), Value::I64(2)])),
+        ]);
+        let bytes = v.encode().unwrap();
+
+        assert_eq!(find_path(&bytes, "alpha").unwrap(), Some(Value::I64(1)));
+        assert_eq!(
+            find_path(&bytes, "charlie").unwrap(),
+            Some(Value::Bool(true))
+        );
+        assert_eq!(
+            find_path(&bytes, "delta").unwrap(),
+            Some(Value::Array(vec![Value::I64(1), Value::I64(2)]))
+        );
+        assert_eq!(find_path(&bytes, "missing").unwrap(), None);
+        // A key that sorts after everything present exercises the early stop.
+        assert_eq!(find_path(&bytes, "zulu").unwrap(), None);
+    }
+
+    #[test]
+    fn find_path_descends_into_nested_maps() {
+        let inner = map(&[("plan", Value::Str("pro".into())), ("seats", Value::I64(5))]);
+        let v = map(&[("other", Value::I64(9)), ("user", inner)]);
+        let bytes = v.encode().unwrap();
+
+        assert_eq!(
+            find_path(&bytes, "user.plan").unwrap(),
+            Some(Value::Str("pro".into()))
+        );
+        assert_eq!(
+            find_path(&bytes, "user.seats").unwrap(),
+            Some(Value::I64(5))
+        );
+        assert_eq!(find_path(&bytes, "user.missing").unwrap(), None);
+        assert_eq!(
+            find_path(&bytes, "other.nope").unwrap(),
+            None,
+            "cannot descend a scalar"
+        );
+        assert_eq!(find_path(&bytes, "").unwrap(), None);
+    }
+
+    /// The lazy lookup must agree with decoding everything and then looking up — otherwise the
+    /// optimisation changes what a filter matches, which is far worse than being slow.
+    #[test]
+    fn find_path_agrees_with_a_full_decode_for_every_field() {
+        let inner = map(&[("a", Value::Null), ("b", Value::F64(1.5))]);
+        let v = map(&[
+            ("bytes", Value::Bytes(vec![1, 2, 3])),
+            ("empty_list", Value::Array(vec![])),
+            ("list", Value::Array(vec![Value::Str("x".into())])),
+            ("nested", inner),
+            ("num", Value::I64(-7)),
+            ("text", Value::Str("hello".into())),
+        ]);
+        let bytes = v.encode().unwrap();
+        let Value::Map(decoded) = Value::decode(&bytes).unwrap() else {
+            panic!("not a map")
+        };
+
+        for key in decoded.keys() {
+            assert_eq!(
+                find_path(&bytes, key).unwrap().as_ref(),
+                decoded.get(key),
+                "field {key}"
+            );
+        }
+        for absent in ["", "zzz", "nested.zzz", "num.zzz", "list.0"] {
+            assert_eq!(find_path(&bytes, absent).unwrap(), None, "{absent}");
+        }
+    }
+
+    #[test]
+    fn skipping_a_value_lands_exactly_where_decoding_it_would() {
+        for value in [
+            Value::Null,
+            Value::Bool(true),
+            Value::I64(i64::MIN),
+            Value::F64(1.5),
+            Value::Str("some text".into()),
+            Value::Bytes(vec![0; 300]),
+            Value::Array(vec![Value::I64(1), Value::Str("two".into())]),
+            map(&[("a", Value::I64(1)), ("b", Value::Array(vec![Value::Null]))]),
+        ] {
+            let mut bytes = value.encode().unwrap();
+            bytes.extend_from_slice(b"SENTINEL");
+
+            let mut skipping = Reader::new(&bytes);
+            skip_value(&mut skipping).unwrap();
+            let mut decoding = Reader::new(&bytes);
+            Value::read_from(&mut decoding).unwrap();
+
+            assert_eq!(skipping.offset(), decoding.offset(), "{value:?}");
+            assert_eq!(skipping.bytes(8).unwrap(), b"SENTINEL", "{value:?}");
+        }
+    }
+
+    #[test]
+    fn the_lazy_path_is_as_strict_as_a_full_decode() {
+        // Hostile nesting must be refused while skipping, not just while decoding.
+        let mut bytes = Vec::new();
+        for _ in 0..100_000 {
+            bytes.push(tag::ARRAY);
+            bytes.push(1);
+        }
+        bytes.push(tag::NULL);
+        let mut r = Reader::new(&bytes);
+        assert!(matches!(
+            skip_value(&mut r),
+            Err(FormatError::Malformed {
+                kind: MalformedKind::DepthExceeded { .. },
+                ..
+            })
+        ));
+
+        // And an absurd container count is refused before allocating.
+        let mut w = Writer::new();
+        w.u8(tag::ARRAY).varint(u64::MAX);
+        let bytes = w.finish();
+        assert!(skip_value(&mut Reader::new(&bytes)).is_err());
     }
 
     #[test]

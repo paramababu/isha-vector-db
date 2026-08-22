@@ -1058,18 +1058,19 @@ impl<'a> CollectionSource<'a> {
         }
     }
 
-    /// A row's metadata, for filter evaluation.
-    fn metadata(&self, row: crate::document::RowId) -> Result<Metadata> {
-        if row.segment() == MEMTABLE_SEGMENT {
-            return Ok(self
-                .memtable_rows
-                .get(row.row() as usize)
-                .and_then(|r| r.metadata.clone())
-                .unwrap_or_default());
-        }
+    /// A buffered row's already-decoded metadata.
+    fn memtable_metadata(&self, row: crate::document::RowId) -> Option<&Metadata> {
+        self.memtable_rows
+            .get(row.row() as usize)?
+            .metadata
+            .as_ref()
+    }
+
+    /// A segment row's encoded metadata map, for lazy field lookup.
+    fn segment_metadata_bytes(&self, row: crate::document::RowId) -> Result<Option<&[u8]>> {
         match self.state.segments.get(row.segment() as usize) {
-            Some(seg) => seg.metadata(row.row()),
-            None => Ok(Metadata::new()),
+            Some(seg) => seg.metadata_bytes(row.row()),
+            None => Ok(None),
         }
     }
 
@@ -1200,8 +1201,21 @@ struct CompiledFilter<'a> {
 
 impl RowPredicate for CompiledFilter<'_> {
     fn matches(&self, row: crate::document::RowId) -> Result<bool> {
-        let metadata = self.source.metadata(row)?;
-        Ok(filter::matches(self.filter, &metadata))
+        // Segment rows are evaluated straight off their encoded bytes, so only the fields the
+        // filter names are decoded. Decoding whole records here was measurably more expensive
+        // than the distance computation the filter avoids — see docs/api/filters.md.
+        if row.segment() == MEMTABLE_SEGMENT {
+            let decoded = self.source.memtable_metadata(row);
+            return Ok(match decoded {
+                Some(m) => filter::matches_fields(self.filter, &filter::Fields::Decoded(m)),
+                None => filter::matches_fields(self.filter, &filter::Fields::Empty),
+            });
+        }
+        let fields = match self.source.segment_metadata_bytes(row)? {
+            Some(bytes) => filter::Fields::Encoded(bytes),
+            None => filter::Fields::Empty,
+        };
+        Ok(filter::matches_fields(self.filter, &fields))
     }
 }
 

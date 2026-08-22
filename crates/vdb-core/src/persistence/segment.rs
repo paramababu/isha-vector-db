@@ -509,6 +509,21 @@ impl SegmentData {
         Ok(())
     }
 
+    /// A row's encoded metadata map, without decoding it.
+    ///
+    /// The hot path of a filtered scan: the filter decodes only the fields it names.
+    ///
+    /// # Errors
+    /// [`CorruptionError`] if the directory points outside the metadata file.
+    pub fn metadata_bytes(&self, row: u32) -> Result<Option<&[u8]>> {
+        let Some(entry) = self.entries.get(row as usize) else {
+            return Ok(None);
+        };
+        MetaBlock::from_payload(&self.meta_payload)
+            .metadata_bytes(entry)
+            .map_err(|e| from_format_at(e, &DbPath::root()))
+    }
+
     /// Read just a row's metadata.
     ///
     /// A filtered scan calls this once per candidate, so it avoids assembling a `Document` and

@@ -21,7 +21,7 @@
 
 mod eval;
 
-pub use eval::matches;
+pub use eval::{matches, matches_fields, Fields};
 
 use crate::error::{Result, ValidationError};
 use crate::metadata::Value;

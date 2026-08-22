@@ -91,6 +91,10 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
   `forbid(unsafe_code)` and the layering that lets a build ship only the indexes it needs.
 - `vdb-format` now fails to compile on a big-endian target, with a message explaining what a port
   would involve — the invariant is enforced rather than documented.
+- **Lazy filter field lookup**: `vdb_format::find_path` walks an encoded metadata map and decodes
+  only the named field, skipping the rest without allocating. Filtered search went from 1.5×
+  slower than an unfiltered scan to break-even. No format change — the existing sorted-key
+  encoding already supports an early stop.
 - CI: `ci-format` refuses a golden-fixture change without a declared `FORMAT-CHANGE:` and a
   `FORMAT_VERSION` bump; `nightly` runs each fuzz target for an hour and reports coverage.
 

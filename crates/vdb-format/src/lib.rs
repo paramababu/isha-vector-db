@@ -65,7 +65,7 @@ pub use segment::{
     Directory, DirectoryWriter, MetaBlock, MetaRecord, MetaWriter, RowEntry, Tombstones,
     VectorBlock, VectorBlockWriter,
 };
-pub use value::{Value, MAX_VALUE_DEPTH};
+pub use value::{find_path, skip_value, Value, MAX_VALUE_DEPTH};
 pub use wal::{WalFrame, WalOp, WalScan, WalTail};
 
 // The format is little-endian throughout, and the index crate reads stored vectors by

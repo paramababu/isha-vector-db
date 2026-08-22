@@ -55,9 +55,9 @@ Headline figures at 50,000 documents × 384 dimensions:
 |---|---|
 | insert, one at a time | 35,300/s (p50 11.7 µs) |
 | insert, batched 1,000 | 40,400/s |
-| search, k=10 (NEON) | p50 2.6 ms, p99 3.3 ms |
-| search, k=10 (scalar reference) | p50 12.5 ms |
-| search, k=10, 10% filter | p50 18.9 ms — **slower**, see below |
+| search, k=10 (NEON) | p50 6.2 ms |
+| search, k=10 (scalar reference) | p50 22.4 ms — 3.6× slower |
+| search, k=10, 10% filter | p50 7.3 ms |
 | get by id | p50 750 ns |
 | cold open | 33.7 ms |
 | recovery, 20k unflushed | 33.8 ms |
@@ -66,14 +66,24 @@ Headline figures at 50,000 documents × 384 dimensions:
 
 ## What the baseline says
 
-**The scan is memory-bandwidth-bound, as designed.** 50,000 × 384 dimensions is 76.8 MB per
-query. The scalar reference does it in 12.5 ms (≈6 GB/s); the NEON kernels in `vdb-index-flat`
-do it in 2.6 ms (≈30 GB/s), a **4.9× speedup** — measured against the committed baseline, which
-is the whole reason the baseline was committed first.
+**Absolute numbers move with thermal state; ratios do not.** Repeated runs on a laptop throttle:
+across one session the same build reported search at 2.6 ms and later at 6.2 ms, with the scalar
+reference moving from 12.5 ms to 22.4 ms in step. Nothing had changed but the temperature.
 
-Both figures are reported, and both are run every time, because the accelerated kernel is only
-trustworthy while it agrees with the reference. The differential tests check that agreement at
-every vector length; this checks it is still worth having.
+This is why the scalar reference is measured in **every** run rather than once: it is a control.
+A change in the accelerated kernel alone is a real change; both moving together is the machine.
+Compare ratios across runs and absolutes only within one.
+
+**The scan is memory-bandwidth-bound, as designed.** 50,000 × 384 dimensions is 76.8 MB per
+query. The NEON kernels are **3.6× faster** than the portable reference — measured against the
+baseline committed one step earlier, which is the whole reason that step came first.
+
+**Filtering is now free rather than expensive.** A filter passing 10% of documents costs 7.3 ms
+against 6.2 ms unfiltered — roughly break-even, where it was 1.5× *slower* before the metadata
+lookup became lazy. It is still not *faster* than an unfiltered scan despite scoring a tenth as
+many rows, because the per-candidate field lookup costs about what the skipped distance saves.
+Making it actually faster needs a field offset table so a lookup is a seek rather than a scan of
+the record, or a secondary index so it touches no metadata at all.
 
 **k barely matters.** k=1 and k=100 differ by 1%, because the heap is noise next to reading 76 MB.
 Selection is not where the time goes.

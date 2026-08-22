@@ -145,7 +145,7 @@ At 50,000 documents × 384 dimensions, on an Apple M-series laptop:
 | workload | result |
 |---|---|
 | insert, one at a time | 35,300/s |
-| search, k=10 | p50 2.6 ms, p99 3.3 ms |
+| search, k=10 | p50 6.2 ms (3.6× the portable reference) |
 | get by id | p50 750 ns |
 | cold open | 33.7 ms |
 | storage overhead | 4.6% above the raw vectors |
@@ -153,13 +153,13 @@ At 50,000 documents × 384 dimensions, on an Apple M-series laptop:
 **These are a reference point on one machine, not a claim about performance in general.** Mobile
 numbers must come from mobile hardware and do not exist yet.
 
-Search uses the SIMD kernels in `vdb-index-flat`, which are 4.9× faster than the portable
+Search uses the SIMD kernels in `vdb-index-flat`, which are 3.6× faster than the portable
 reference in `vdb-core` on this machine. `Database::open` gives you the reference — correct
 everywhere, `unsafe`-free, slower; `Database::open_with_index` takes the accelerated one, which
 is what every shipped SDK will pass.
 
-One finding worth knowing before you rely on it: **metadata filtering currently makes search
-slower, not faster.** The details and the fix are in
+Metadata filtering is roughly free — a filter passing 10% of documents costs about what an
+unfiltered scan does. It does not yet make search *faster*; see
 [docs/api/filters.md](docs/api/filters.md#what-filtering-costs).
 
 ## Contributing
