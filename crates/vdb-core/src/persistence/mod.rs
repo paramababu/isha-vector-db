@@ -1,9 +1,14 @@
 //! Durability: the log, recovery, and the policy that decides when bytes must be safe.
 
+pub mod layout;
+pub mod manifest;
 pub mod recovery;
+pub mod segment;
 pub mod wal;
 
+pub use manifest::ManifestStore;
 pub use recovery::{replay_into, ReplayReport};
+pub use segment::{flush_memtable, FlushResult, SegmentData};
 pub use wal::WalWriter;
 
 /// How aggressively writes are made durable.

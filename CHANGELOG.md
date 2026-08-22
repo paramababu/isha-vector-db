@@ -40,6 +40,12 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
   dropped syncs at a chosen I/O operation.
 - The crash sweep: five fault classes swept across every mutating I/O operation in a workload,
   asserting after each that recovery yields one of the legal committed prefixes.
+- `vdb-core` persistence: `layout` (every path in the database built in one place, validated
+  once), `ManifestStore` (dual-slot commit that never overwrites the slot it would fall back
+  to), and segment flush/read-back including tombstone rewriting, orphan detection and
+  cross-file row-count consistency checks.
+- The crash sweep extended over the full write → flush → commit → checkpoint cycle, asserting
+  both that recovery lands on a legal state and that the database stays usable afterwards.
 - CI: `ci-format` refuses a golden-fixture change without a declared `FORMAT-CHANGE:` and a
   `FORMAT_VERSION` bump; `nightly` runs each fuzz target for an hour and reports coverage.
 
