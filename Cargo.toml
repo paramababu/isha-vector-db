@@ -7,6 +7,7 @@ members = [
     "crates/vdb-ffi",
     "crates/vdb-format",
     "crates/vdb-index-flat",
+    "crates/vdb-node",
     "crates/vdb-storage-memory",
     "crates/vdb-storage-os",
     "crates/vdb-testkit",

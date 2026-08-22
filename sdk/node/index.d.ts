@@ -1,0 +1,108 @@
+/**
+ * An embedded, offline-first vector database.
+ *
+ * These declarations are the canonical shape of the JavaScript API. `@vdb/web` and
+ * `@vdb/react-native` mirror them exactly: naming adapts to each platform's conventions, but
+ * semantics, argument order, defaults and error classification never do. Semantic divergence
+ * between SDKs is the fastest way to make a cross-platform library untrustworthy.
+ */
+
+/** How aggressively writes are made durable. */
+export type Durability =
+  /** Sync every write. Safe against power loss; slow on flash. */
+  | 'full'
+  /**
+   * Sync on batch commit, flush and close. The default.
+   *
+   * In every mode a process crash loses nothing — the bytes are in the page cache. Only power
+   * loss can lose an unsynced write, and on a phone process death is routine while power loss
+   * is rare.
+   */
+  | 'batch'
+  /** Sync on flush and close only. For bulk import. */
+  | 'relaxed';
+
+/** Similarity metric. */
+export type Metric =
+  /** Cosine similarity. Ignores magnitude, which is usually what embeddings want. */
+  | 'cosine'
+  /** Euclidean distance. */
+  | 'l2'
+  /**
+   * Inner product. Rewards magnitude as well as direction, so a longer vector can outrank an
+   * exact match — that is what the inner product means, not a defect.
+   */
+  | 'dot';
+
+export interface OpenOptions {
+  /** Create the database if the directory holds none. Defaults to true. */
+  createIfMissing?: boolean;
+  /** Open without the write lock and refuse every mutation. Defaults to false. */
+  readOnly?: boolean;
+  /** Defaults to `'batch'`. */
+  durability?: Durability;
+  /** Flush a collection's buffer into a segment past this many bytes. */
+  flushThresholdBytes?: number;
+}
+
+export interface CollectionOptions {
+  /** Vector dimension. Fixed for the collection's lifetime. */
+  dimension: number;
+  /** Defaults to `'cosine'`. */
+  metric?: Metric;
+}
+
+/** Metadata values. Flat scalars for now; nested objects and arrays are not yet supported. */
+export type MetadataValue = string | number | boolean | null;
+export type MetadataInput = Record<string, MetadataValue>;
+
+export interface Hit {
+  id: string;
+  /** Always higher-is-better, whatever the metric. */
+  score: number;
+  /** The metric-native distance. Absent for `'dot'`, which defines none. */
+  distance?: number;
+}
+
+export interface CollectionStats {
+  liveDocuments: number;
+  /** Rows on disk, tombstones included. */
+  totalRows: number;
+  segments: number;
+  /** Documents written but not yet folded into a segment. */
+  bufferedDocuments: number;
+  /** Fraction of rows that are tombstones, 0 to 1. Compaction reclaims them. */
+  deadRatio: number;
+}
+
+export declare class Collection {
+  readonly name: string;
+  readonly dimension: number;
+  /** Insert or replace. Returns true when the document was new. */
+  upsert(id: string, vector: Float32Array, metadata?: MetadataInput): boolean;
+  /** Remove a document. Returns whether it existed; removing an absent one is not an error. */
+  delete(id: string): boolean;
+  contains(id: string): boolean;
+  count(): number;
+  /** Ordered by score descending, ties broken by ascending id. */
+  search(query: Float32Array, topK: number): Hit[];
+  flush(): void;
+  stats(): CollectionStats;
+}
+
+export declare class Database {
+  readonly isOpen: boolean;
+  /** Create a collection, or open it if one exists with a matching shape. */
+  collection(name: string, options: CollectionOptions): Collection;
+  openCollection(name: string): Collection;
+  /** Delete a collection and everything in it. Irreversible. */
+  dropCollection(name: string): void;
+  listCollections(): string[];
+  flush(): void;
+  /** Flush and close, releasing the lock. Idempotent. */
+  close(): void;
+  [Symbol.dispose](): void;
+}
+
+/** Open or create a database at a directory path. */
+export declare function open(path: string, options?: OpenOptions): Database;

@@ -1,0 +1,45 @@
+name: ci-node
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        # N-API is ABI-stable across Node majors, which is the whole reason for choosing it.
+        # Testing the ends of the supported range is what turns that into a claim we can make.
+        node: [18, 22]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - uses: Swatinem/rust-cache@v2
+      - run: ./scripts/build-node.sh
+      - run: npm test
+        working-directory: sdk/node
+
+  one-binary-many-node-versions:
+    # Build once, run everywhere. If this fails, N-API is not delivering what it promises and
+    # the packaging story — prebuilt binaries rather than node-gyp in every install — is wrong.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: ./scripts/build-node.sh
+      - name: The same binary under 18, 20 and 22
+        run: |
+          for v in 18 20 22; do
+            echo "--- node $v ---"
+            npx --yes node@$v --test "test/**/*.test.js"
+          done
+        working-directory: sdk/node

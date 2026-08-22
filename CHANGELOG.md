@@ -101,6 +101,10 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
   null check on every pointer. Guarded by a bidirectional header/implementation drift test, an
   ABI behaviour suite, a real C program compiled and run in CI on Linux and macOS, a
   version-bump gate, and a 1.5 MB size budget.
+- **Node SDK** (`@vdb/node`): an N-API addon plus a thin JavaScript layer, with TypeScript
+  declarations that are the canonical shape every other JavaScript SDK will mirror. Supports
+  `using` for scope-based closing. Tested on Node 18 through 22 from one binary, which is the
+  claim N-API exists to make.
 - CI: `ci-format` refuses a golden-fixture change without a declared `FORMAT-CHANGE:` and a
   `FORMAT_VERSION` bump; `nightly` runs each fuzz target for an hour and reports coverage.
 

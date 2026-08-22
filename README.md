@@ -65,7 +65,8 @@ Nothing at or below the public API knows which platform it is on. That is enforc
 | Benchmark harness and committed baseline | Done |
 | SIMD kernels (NEON, AVX2, simd128) | Done |
 | C ABI (`vdb.h`), frozen and guarded | Done |
-| Node SDK, then the mobile SDKs | Next |
+| Node SDK (`@vdb/node`) | Done |
+| Mobile SDKs: Android, iOS, Flutter, React Native | Next |
 | `vdb-index-flat`, search, filters | Not started |
 | `vdb-storage-os` | Not started |
 | C ABI, SDKs, HNSW, web | Later phases |
@@ -121,6 +122,26 @@ cargo fmt --all --check
 ```
 
 Rust 1.78 or newer. The workspace has no third-party dependencies.
+
+## Node.js
+
+```bash
+./scripts/build-node.sh          # builds sdk/node/vdb.node
+cd sdk/node && npm test
+```
+
+```js
+const vdb = require('@vdb/node');
+
+using db = vdb.open('/path/to/db');
+const docs = db.collection('docs', { dimension: 384, metric: 'cosine' });
+
+docs.upsert('a', embedding, { category: 'tools', price: 25 });
+const hits = docs.search(query, 10);   // [{ id, score, distance }]
+```
+
+Synchronous, because the engine is — run a large search in a worker if it would block your event
+loop. `using` closes the database even when an exception unwinds past your cleanup.
 
 ## The `vdb` tool
 

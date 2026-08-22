@@ -6,3 +6,6 @@ Cargo.lock.orig
 /benchmarks/results/local/
 node_modules/
 firebase-debug.log
+
+# The Node addon is a build artifact.
+sdk/node/vdb.node
