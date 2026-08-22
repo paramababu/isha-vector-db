@@ -34,6 +34,33 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
 
 ### Added
 
+- **The web SDK (`sdk/web`), running the engine in WebAssembly on OPFS.** Phase 4.
+
+  `vdb-storage-web` is a new storage backend that calls a hand-written table of host imports, so
+  `vdb-core` still knows nothing about any platform. There is no `wasm-bindgen` and no bundler:
+  the SDK drives the same `include/vdb.h` every other binding uses, and the toolchain is
+  `cargo build --target wasm32-unknown-unknown`. The module is 362 KB.
+
+  The engine calls storage synchronously, but OPFS sync access handles are *obtained*
+  asynchronously, so a file cannot be opened when the engine asks. The OPFS adapter opens a pool
+  of handles at start-up and assigns them to paths on demand, each slot carrying a header naming
+  the path it holds so the mapping is recovered on reload with no separate index to keep
+  consistent.
+
+  Tested: the 25-check storage conformance suite and a full engine test run against the backend
+  natively, through a Rust implementation of the same host imports; 7 JavaScript tests run the
+  real WebAssembly module. **Real OPFS is not covered** — `sdk/web/test/opfs.test.js` uses a
+  stand-in, and `sdk/web/test/browser.html` is the check only a browser can perform.
+
+  Two exports outside the C ABI, `vdb_wasm_alloc` and `vdb_wasm_free`: JavaScript cannot allocate
+  in the module's linear memory. The header-drift guard now carries a named, self-checking
+  exemption list rather than being widened.
+
+  Found along the way: `SystemTime::now()` **panics** on `wasm32-unknown-unknown`, which arrived
+  as `RuntimeError: unreachable` with no message. The wasm build now installs a panic hook that
+  reports the message to the embedder, and takes the clock from the host.
+
+
 - Architecture documentation: eleven design documents plus decision records
   (`docs/architecture/`, `docs/adr/`).
 - `vdb-core`: structured error model with stable numeric codes and recoverability

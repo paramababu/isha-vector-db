@@ -69,7 +69,13 @@ use vdb_core::metadata::{Metadata, Value};
 use vdb_core::persistence::Durability;
 use vdb_core::vector::VectorView;
 use vdb_core::{DbError, Metric};
+#[cfg(target_arch = "wasm32")]
+pub mod wasm;
+
+#[cfg(not(target_arch = "wasm32"))]
 use vdb_storage_os::OsStorage;
+#[cfg(target_arch = "wasm32")]
+use vdb_storage_web::WebStorage;
 
 use error::{guard, set_error};
 use strings::{borrow_bytes, borrow_str};
@@ -115,12 +121,25 @@ const DURABILITY_RELAXED: i32 = 3;
 #[derive(Debug)]
 struct SystemClock;
 
+/// The wall clock, however this platform provides one.
+///
+/// `std::time::SystemTime::now()` **panics** on `wasm32-unknown-unknown`: the target has no
+/// notion of time at all, and the standard library's stub is `unimplemented!()`. That surfaced
+/// here as `RuntimeError: unreachable` the first time a database was opened in a browser build,
+/// which is why the panic hook in [`wasm`] exists. On wasm the time comes from the embedder,
+/// which has `Date.now()`.
 impl Clock for SystemClock {
+    #[cfg(not(target_arch = "wasm32"))]
     fn now_ms(&self) -> u64 {
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_millis() as u64)
             .unwrap_or(0)
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn now_ms(&self) -> u64 {
+        crate::wasm::host_now_ms()
     }
 }
 
@@ -179,11 +198,20 @@ pub unsafe extern "C" fn vdb_open(
             _ => return Err(Boundary::InvalidArgument),
         };
 
+        #[cfg(target_arch = "wasm32")]
+        crate::wasm::install_panic_hook();
+
         let config = DatabaseConfig::default()
             .create_if_missing(create_if_missing && !read_only)
             .read_only(read_only)
             .durability(durability);
+        // The one place in the C ABI that differs by target. Everything above and below this
+        // line — handles, strings, errors, the whole surface in `include/vdb.h` — is identical,
+        // which is what lets the web SDK drive the same ABI as the native ones.
+        #[cfg(not(target_arch = "wasm32"))]
         let storage = Arc::new(OsStorage::open(path).map_err(Boundary::Db)?);
+        #[cfg(target_arch = "wasm32")]
+        let storage = Arc::new(WebStorage::open(path));
         let db = Database::open_with_index(
             storage,
             config,

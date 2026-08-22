@@ -72,7 +72,8 @@ Nothing at or below the public API knows which platform it is on. That is enforc
 | Filters in Node | Done |
 | Filters in Java, with metadata writing | Done |
 | Compaction, verification and stats in every SDK | Done |
-| Flutter, React Native, Web | Next |
+| Web / WASM — WebAssembly module, OPFS storage, 7 SDK tests | Done (real OPFS unverified) |
+| Flutter, React Native | Next |
 | `vdb-index-flat`, search, filters | Not started |
 | `vdb-storage-os` | Not started |
 | C ABI, SDKs, HNSW, web | Later phases |

@@ -16,7 +16,15 @@ crate-type = ["rlib", "cdylib", "staticlib"]
 vdb-core.workspace = true
 vdb-format.workspace = true
 vdb-index-flat.workspace = true
+
+# The storage backend is chosen by target, not by feature: a build for the web cannot link the
+# OS backend at all (there is no filesystem), and a native build has no use for the host imports
+# the web backend declares, which would be unresolved symbols at link time.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 vdb-storage-os.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+vdb-storage-web.workspace = true
 
 [lints]
 workspace = true

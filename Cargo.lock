@@ -343,6 +343,7 @@ dependencies = [
  "vdb-format",
  "vdb-index-flat",
  "vdb-storage-os",
+ "vdb-storage-web",
 ]
 
 [[package]]
@@ -392,6 +393,14 @@ name = "vdb-storage-os"
 version = "0.0.1"
 dependencies = [
  "libc",
+ "vdb-core",
+ "vdb-testkit",
+]
+
+[[package]]
+name = "vdb-storage-web"
+version = "0.0.1"
+dependencies = [
  "vdb-core",
  "vdb-testkit",
 ]

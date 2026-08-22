@@ -1,0 +1,35 @@
+name: web
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the wasm target
+        run: rustup target add wasm32-unknown-unknown
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Builds the module and runs the SDK tests: the whole web stack, from JavaScript through
+      # the C ABI to the engine and back. What it cannot cover is real OPFS, which needs a
+      # browser; sdk/web/test/browser.html exists for that.
+      - name: Build and test
+        run: ./scripts/build-web.sh
+
+      # The module is committed so the SDK is usable straight from a checkout. If a build
+      # produces different bytes, that is a change someone needs to look at.
+      - name: The committed module matches this build
+        run: |
+          if ! git diff --quiet -- sdk/web/vdb.wasm; then
+            echo "sdk/web/vdb.wasm differs from a fresh build of this commit."
+            echo "Run ./scripts/build-web.sh and commit the result."
+            exit 1
+          fi

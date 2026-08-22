@@ -83,15 +83,67 @@ fn declared() -> BTreeSet<String> {
     out
 }
 
+/// Symbols that are exported but deliberately not part of the C ABI.
+///
+/// The list is spelled out here, in the guard, rather than inferred from a `cfg` attribute in
+/// the source. Inferring it would make the exemption invisible at review time and easy to widen
+/// by accident; naming each symbol means adding one is a deliberate edit to the file whose whole
+/// job is to stop the ABI drifting.
+///
+/// Everything on this list must be genuinely outside the contract in `include/vdb.h` — a
+/// calling-convention detail of one embedder, not database functionality. `vdb_abi_version()`
+/// does not cover any of it.
+const NOT_PART_OF_THE_C_ABI: &[(&str, &str)] = &[
+    (
+        "vdb_wasm_alloc",
+        "WebAssembly only: JavaScript cannot allocate in this module's linear memory, so the \
+         module must hand it a region. A C caller has its own allocator and never needs this.",
+    ),
+    (
+        "vdb_wasm_free",
+        "WebAssembly only: the counterpart to vdb_wasm_alloc.",
+    ),
+];
+
 #[test]
 fn every_exported_function_is_declared_in_the_header() {
     let (exported, declared) = (exported(), declared());
-    let missing: Vec<&String> = exported.difference(&declared).collect();
+    let exempt: BTreeSet<String> = NOT_PART_OF_THE_C_ABI
+        .iter()
+        .map(|(name, _)| (*name).to_owned())
+        .collect();
+    let missing: Vec<&String> = exported
+        .difference(&declared)
+        .filter(|name| !exempt.contains(*name))
+        .collect();
     assert!(
         missing.is_empty(),
         "exported but absent from include/vdb.h: {missing:?}\n\
-         An SDK author cannot call what the header does not mention."
+         An SDK author cannot call what the header does not mention.\n\
+         If a symbol is genuinely not part of the C ABI, add it to NOT_PART_OF_THE_C_ABI with \
+         a reason."
     );
+}
+
+/// The exemption list must not rot.
+///
+/// An entry for a symbol that no longer exists is a stale exemption, and a stale exemption is
+/// how a real export slips through later under a name someone already blessed.
+#[test]
+fn every_exemption_names_a_symbol_that_exists() {
+    // The wasm-only exports are compiled out on this target, so their absence from `exported()`
+    // proves nothing. Look for them in the source instead.
+    let sources = sources().join("\n");
+    for (name, reason) in NOT_PART_OF_THE_C_ABI {
+        assert!(
+            sources.contains(name),
+            "{name} is exempted from the header but no longer exported; remove the exemption"
+        );
+        assert!(
+            reason.len() > 30,
+            "{name} needs a real reason for being outside the C ABI"
+        );
+    }
 }
 
 #[test]
