@@ -29,6 +29,8 @@
 #[macro_use]
 extern crate napi_derive;
 
+mod filter;
+
 use std::sync::Arc;
 
 // `Result` unaliased, and this is not a style preference. The `#[napi]` macro inspects the
@@ -37,7 +39,7 @@ use std::sync::Arc;
 // convert. Aliasing it to `Result<T>` compiled, ran, and silently returned every error to
 // JavaScript as an ordinary return value instead of throwing it, so `col.upsert(...)` handed
 // back an `Error` object where callers expected a boolean and nothing stopped them using it.
-use napi::bindgen_prelude::{Float32Array, Result};
+use napi::bindgen_prelude::{Float32Array, Object, Result};
 use napi::Error as NapiError;
 
 use vdb_core::api::{
@@ -318,9 +320,21 @@ impl Collection {
 
     /// Find the nearest documents.
     #[napi]
-    pub fn search(&self, query: Float32Array, top_k: u32) -> Result<Vec<Hit>> {
-        let request =
+    pub fn search(
+        &self,
+        query: Float32Array,
+        top_k: u32,
+        filter: Option<Object>,
+    ) -> Result<Vec<Hit>> {
+        let parsed = match filter {
+            Some(object) => Some(filter::parse(object)?),
+            None => None,
+        };
+        let mut request =
             SearchRequest::new(VectorView::f32(&query), top_k as usize).with_include(Include::NONE);
+        if let Some(f) = parsed.as_ref() {
+            request = request.with_filter(f);
+        }
         let response = self.inner.search(&request).map_err(to_js)?;
         Ok(response
             .hits

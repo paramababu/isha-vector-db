@@ -121,6 +121,10 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
 - **Filters in Swift**: an `indirect enum` tree with `&&`, `||` and `!`, flattened to postfix on
   the way down, so the stack is invisible to callers and an unbalanced sequence is
   unconstructible. Metadata can now be written from Swift too.
+- **Filters in Node**: a query object — `{ category: 'tools', price: { $lt: 50 } }` — with
+  `$and`/`$or`/`$not`, comparison operators, `$in`/`$nin`, `$exists`, `$startsWith` and
+  `$contains`. Node binds the engine directly, so it takes the shape a JavaScript developer
+  would write rather than the postfix builder the C bindings use.
 - CI: `ci-format` refuses a golden-fixture change without a declared `FORMAT-CHANGE:` and a
   `FORMAT_VERSION` bump; `nightly` runs each fuzz target for an hour and reports coverage.
 

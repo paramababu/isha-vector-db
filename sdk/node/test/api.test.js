@@ -53,10 +53,9 @@ test('open, write, search, close', () => {
   });
 });
 
-test('metadata round-trips, with integers staying integers', () => {
+test('metadata is actually stored, with integers staying integers', () => {
   withDb((db) => {
     const c = db.collection('docs', { dimension: 2 });
-    // A number written as 3 must come back as 3, not 3.0 — otherwise integer filters miss.
     c.upsert('a', new Float32Array([1, 0]), {
       kind: 'tool',
       count: 3,
@@ -64,7 +63,22 @@ test('metadata round-trips, with integers staying integers', () => {
       live: true,
       nothing: null,
     });
-    assert.equal(c.count(), 1);
+    c.upsert('b', new Float32Array([0, 1]));
+
+    // Asserted through filters, because that is the only way to observe stored metadata from
+    // here. An earlier version of this test checked only `count()`, which would have passed
+    // just as happily had the metadata been silently dropped — and for a while it was.
+    const q = new Float32Array([1, 0]);
+    const ids = (f) => c.search(q, 10, f).map((h) => h.id);
+    assert.deepEqual(ids({ kind: 'tool' }), ['a']);
+    assert.deepEqual(ids({ live: true }), ['a']);
+    assert.deepEqual(ids({ price: 1.5 }), ['a']);
+    // A number written as 3 must come back as an integer 3, or integer comparisons would miss.
+    assert.deepEqual(ids({ count: 3 }), ['a']);
+    assert.deepEqual(ids({ count: { $gte: 3, $lte: 3 } }), ['a']);
+    // An explicit null is present-and-null, and the document without metadata has neither.
+    assert.deepEqual(ids({ nothing: { $exists: true } }), ['a']);
+    assert.deepEqual(ids({ kind: { $exists: false } }), ['b']);
   });
 });
 
@@ -235,6 +249,132 @@ test('non-scalar metadata is refused with a clear message', () => {
     assert.throws(
       () => c.upsert('a', new Float32Array([1, 0]), { nested: { a: 1 } }),
       /strings, numbers, booleans or null/,
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// filters
+// ---------------------------------------------------------------------------
+
+/** Three documents at decreasing similarity to [1, 0], so filtering is visible separately from ranking. */
+function corpus(db) {
+  const c = db.collection('docs', { dimension: 2 });
+  c.upsert('hammer', new Float32Array([1, 0]), { category: 'tools', price: 25, sale: true });
+  c.upsert('saw', new Float32Array([0.95, 0.31]), { category: 'tools', price: 75 });
+  c.upsert('ball', new Float32Array([0.7, 0.7]), { category: 'toys' });
+  return c;
+}
+
+const ids = (hits) => hits.map((h) => h.id);
+
+test('a bare value means equality', () => {
+  withDb((db) => {
+    const c = corpus(db);
+    assert.deepEqual(ids(c.search(new Float32Array([1, 0]), 10)), ['hammer', 'saw', 'ball']);
+    assert.deepEqual(
+      ids(c.search(new Float32Array([1, 0]), 10, { category: 'tools' })),
+      ['hammer', 'saw'],
+    );
+  });
+});
+
+test('several keys in one object mean conjunction', () => {
+  withDb((db) => {
+    const c = corpus(db);
+    const hits = c.search(new Float32Array([1, 0]), 10, {
+      category: 'tools',
+      price: { $lt: 50 },
+    });
+    assert.deepEqual(ids(hits), ['hammer']);
+  });
+});
+
+test('comparison operators', () => {
+  withDb((db) => {
+    const c = corpus(db);
+    const q = new Float32Array([1, 0]);
+    assert.deepEqual(ids(c.search(q, 10, { price: { $gt: 50 } })), ['saw']);
+    assert.deepEqual(ids(c.search(q, 10, { price: { $gte: 25, $lte: 75 } })), ['hammer', 'saw']);
+    assert.deepEqual(ids(c.search(q, 10, { category: { $ne: 'tools' } })), ['ball']);
+    assert.deepEqual(ids(c.search(q, 10, { category: { $in: ['toys', 'games'] } })), ['ball']);
+    assert.deepEqual(ids(c.search(q, 10, { category: { $nin: ['toys'] } })), ['hammer', 'saw']);
+    assert.deepEqual(ids(c.search(q, 10, { category: { $startsWith: 'too' } })), ['hammer', 'saw']);
+  });
+});
+
+test('$and, $or and $not compose', () => {
+  withDb((db) => {
+    const c = corpus(db);
+    const q = new Float32Array([1, 0]);
+    assert.deepEqual(
+      ids(c.search(q, 10, { $or: [{ category: 'toys' }, { price: { $gt: 50 } }] })),
+      ['saw', 'ball'],
+    );
+    assert.deepEqual(ids(c.search(q, 10, { $not: { category: 'tools' } })), ['ball']);
+    // Three levels deep, in one object.
+    const nested = {
+      $or: [
+        { $and: [{ category: 'tools' }, { $or: [{ price: { $lt: 50 } }, { sale: true }] }] },
+        { category: 'toys' },
+      ],
+    };
+    assert.deepEqual(ids(c.search(q, 10, nested)), ['hammer', 'ball']);
+  });
+});
+
+test('absent fields behave as documented', () => {
+  withDb((db) => {
+    const c = corpus(db);
+    const q = new Float32Array([1, 0]);
+    // "ball" has no price.
+    assert.deepEqual(ids(c.search(q, 10, { price: { $exists: true } })), ['hammer', 'saw']);
+    assert.deepEqual(ids(c.search(q, 10, { price: { $exists: false } })), ['ball']);
+    // $ne is the exact negation of equality, so it matches the absent field too.
+    assert.deepEqual(ids(c.search(q, 10, { price: { $ne: 25 } })), ['saw', 'ball']);
+  });
+});
+
+test('an empty filter matches everything and topK counts matches', () => {
+  withDb((db) => {
+    const c = corpus(db);
+    const q = new Float32Array([1, 0]);
+    assert.equal(c.search(q, 10, {}).length, 3);
+    assert.equal(c.search(q, 10, undefined).length, 3);
+    // Only one document matches, and asking for two returns the one.
+    assert.deepEqual(ids(c.search(q, 2, { category: 'toys' })), ['ball']);
+  });
+});
+
+test('type mismatches are false rather than errors', () => {
+  withDb((db) => {
+    const c = corpus(db);
+    const q = new Float32Array([1, 0]);
+    assert.deepEqual(ids(c.search(q, 10, { category: 1 })), []);
+    assert.deepEqual(ids(c.search(q, 10, { category: { $gt: 1 } })), []);
+  });
+});
+
+test('malformed filters are rejected with a message naming the problem', () => {
+  withDb((db) => {
+    const c = corpus(db);
+    const q = new Float32Array([1, 0]);
+    assert.throws(() => c.search(q, 10, { price: { $nope: 1 } }), /unknown operator/);
+    assert.throws(() => c.search(q, 10, { $nope: [] }), /unknown filter operator/);
+    assert.throws(() => c.search(q, 10, { $and: 'not an array' }), /array of filters/);
+    // An array as a field value is ambiguous, so it is refused rather than guessed at.
+    assert.throws(() => c.search(q, 10, { tags: ['a'] }), /\$contains/);
+    assert.throws(() => c.search(q, 10, { name: { $startsWith: 5 } }), /takes a string/);
+  });
+});
+
+test('filters work after a flush, out of a segment', () => {
+  withDb((db) => {
+    const c = corpus(db);
+    c.flush();
+    assert.deepEqual(
+      ids(c.search(new Float32Array([1, 0]), 10, { category: 'tools' })),
+      ['hammer', 'saw'],
     );
   });
 });

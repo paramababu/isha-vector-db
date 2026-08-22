@@ -56,6 +56,52 @@ export interface CollectionOptions {
 export type MetadataValue = string | number | boolean | null;
 export type MetadataInput = Record<string, MetadataValue>;
 
+/**
+ * A metadata predicate, written as a query object.
+ *
+ * ```js
+ * { category: 'tools', price: { $lt: 50 } }              // both must hold
+ * { $or: [{ category: 'toys' }, { price: { $gt: 50 } }] }
+ * { $not: { archived: true } }
+ * { tags: { $contains: 'sharp' } }                        // array membership, not substring
+ * { price: { $exists: true } }
+ * ```
+ *
+ * A bare value means equality, and several keys in one object mean conjunction — which is what
+ * the shape looks like it means. `{}` matches everything.
+ *
+ * Evaluation is **total**: comparing a string to a number is `false`, never an error, and a
+ * field no document has is absent. Three rules surprise people and are worth knowing:
+ * an absent field equals `null`; `$ne` is the exact negation of equality so it matches absent
+ * fields; and `$gt` and `$lte` are *both* false where no ordering exists, so they are not
+ * negations of one another. See `docs/api/filters.md`.
+ */
+export type Filter = {
+  $and?: Filter[];
+  $or?: Filter[];
+  $not?: Filter;
+} & {
+  [field: string]: MetadataValue | FieldPredicate | Filter[] | Filter | undefined;
+};
+
+export interface FieldPredicate {
+  $eq?: MetadataValue;
+  /** The exact negation of `$eq`, so it matches documents lacking the field. */
+  $ne?: MetadataValue;
+  $gt?: MetadataValue;
+  $gte?: MetadataValue;
+  $lt?: MetadataValue;
+  $lte?: MetadataValue;
+  $in?: MetadataValue[];
+  $nin?: MetadataValue[];
+  /** True: the field is present, including an explicit null. False: absent or null. */
+  $exists?: boolean;
+  /** The field is a string with this prefix. */
+  $startsWith?: string;
+  /** The field is an **array** containing this value. Not a substring test. */
+  $contains?: MetadataValue;
+}
+
 export interface Hit {
   id: string;
   /** Always higher-is-better, whatever the metric. */
@@ -84,8 +130,13 @@ export declare class Collection {
   delete(id: string): boolean;
   contains(id: string): boolean;
   count(): number;
-  /** Ordered by score descending, ties broken by ascending id. */
-  search(query: Float32Array, topK: number): Hit[];
+  /**
+   * Ordered by score descending, ties broken by ascending id.
+   *
+   * `topK` counts *matches*, not candidates: a filter excluding most of the collection still
+   * returns up to `topK` results.
+   */
+  search(query: Float32Array, topK: number, filter?: Filter): Hit[];
   flush(): void;
   stats(): CollectionStats;
 }

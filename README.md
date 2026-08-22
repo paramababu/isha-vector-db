@@ -69,7 +69,8 @@ Nothing at or below the public API knows which platform it is on. That is enforc
 | Android SDK (JNI + Java API) | Done |
 | iOS SDK (Swift + XCFramework) | Done |
 | Metadata filters across the C ABI and Swift | Done |
-| Filters in Node and Java; then Flutter, React Native, Web | Next |
+| Filters in Node | Done |
+| Filters in Java; then Flutter, React Native, Web | Next |
 | `vdb-index-flat`, search, filters | Not started |
 | `vdb-storage-os` | Not started |
 | C ABI, SDKs, HNSW, web | Later phases |
@@ -140,7 +141,9 @@ using db = vdb.open('/path/to/db');
 const docs = db.collection('docs', { dimension: 384, metric: 'cosine' });
 
 docs.upsert('a', embedding, { category: 'tools', price: 25 });
-const hits = docs.search(query, 10);   // [{ id, score, distance }]
+
+const hits = docs.search(query, 10, { category: 'tools', price: { $lt: 50 } });
+// [{ id, score, distance }]
 ```
 
 Synchronous, because the engine is — run a large search in a worker if it would block your event
