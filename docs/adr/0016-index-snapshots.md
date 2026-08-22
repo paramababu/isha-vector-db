@@ -62,9 +62,13 @@ Measured on this machine:
 The limitation ADR-0015 recorded is gone. Search latency and recall are unchanged — the restored
 graph is the built graph, and a test asserts the two give identical answers.
 
-The remaining cost is that a write invalidates the whole graph: any change to the row count
-forces a full rebuild and a new snapshot. Incremental insertion is the obvious next improvement
-and is not here.
+A write no longer invalidates the whole graph. When the rows already in it are still the leading
+rows of the source — what an append-only store does — the new ones are appended and a fresh
+snapshot written. `build_from` inserts one node at a time in source order, so appending in that
+order yields exactly the graph a full rebuild would; `extending_matches_a_full_rebuild` pins the
+equivalence rather than trusting the argument. Compaction renumbers rows, so the prefix check
+fails and a rebuild happens, which is correct: after a compaction the graph describes rows that
+no longer exist.
 
 ## How this is tested
 

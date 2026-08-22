@@ -151,6 +151,32 @@ impl VectorIndex for HnswIndex {
             None => None,
         };
 
+        // Extending an existing graph, when the rows it already covers are still the first rows
+        // of the source. That is the ordinary shape of a write to an append-only store, and the
+        // difference between adding one document to a 50,000-vector collection in milliseconds
+        // and rebuilding the whole graph for eighty seconds.
+        if restored.is_none() {
+            let mut guard = self.graph.write().unwrap_or_else(|e| e.into_inner());
+            // Re-checked under the write lock: another thread may have rebuilt or extended it
+            // while this one was decoding.
+            if guard.is_valid_for(rows, dimension, metric) {
+                return Ok(());
+            }
+            if guard.len() > 0 && guard.is_prefix_of(&decoded, dimension, metric) {
+                // `is_prefix_of` has already established that the graph is no longer than
+                // `decoded`, so the tail exists; taken through `get` anyway, because this file
+                // carries no blanket indexing allowance and a silent empty extend is a better
+                // failure than a panic if that invariant ever changes.
+                let already = guard.len();
+                let tail = decoded.get(already..).unwrap_or(&[]).to_vec();
+                build::extend(&mut guard, &tail, metric, &self.params);
+                let bytes = snapshot::encode(&guard, &self.params);
+                drop(guard);
+                let _ = snapshots.store(&bytes);
+                return Ok(());
+            }
+        }
+
         let (graph, is_new) = match restored {
             Some(g) => (g, false),
             None => (

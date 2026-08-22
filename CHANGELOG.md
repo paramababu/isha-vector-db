@@ -46,8 +46,12 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
   Building takes about eighty seconds for 50,000 × 384. That was a serious limitation while the
   graph lived only in memory; **it is now persisted**, so reopening a database restores the graph
   in **40.9 ms instead of rebuilding it in 80.1 s — 1,958× faster**
-  ([ADR-0016](docs/adr/0016-index-snapshots.md)). A write still invalidates the whole graph and
-  forces a rebuild; incremental insertion is the next improvement.
+  ([ADR-0016](docs/adr/0016-index-snapshots.md)). **Writes now extend the graph rather than rebuilding it**: when the rows
+  already in the graph are still the leading rows of the source — the ordinary shape of a write
+  to an append-only store — the new ones are appended. A batch build *is* sequential insertion,
+  so appending in source order produces exactly the graph a full rebuild would, and a test pins
+  that equivalence rather than assuming it. Compaction renumbers rows and correctly forces a
+  rebuild.
 
   `VectorIndex::prepare` takes an `IndexSnapshots` — `load` and `store` — implemented by the
   engine over storage. **A snapshot is a cache, not data**, which is what let this ship without an

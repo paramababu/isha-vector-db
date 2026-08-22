@@ -368,3 +368,83 @@ fn a_missing_snapshot_is_not_an_error() {
     assert_eq!(slot.loaded(), 1, "the slot should have been consulted");
     assert_eq!(slot.stored(), 1);
 }
+
+/// Appending rows must give exactly the graph a full rebuild would.
+///
+/// This is the claim the whole incremental path rests on: `build_from` inserts one node at a
+/// time in the source's order, so appending in that same order is the same operation. If it were
+/// only *approximately* the same, a long-lived collection would drift away from the graph its
+/// parameters describe, and nothing would ever say so.
+#[test]
+fn extending_matches_a_full_rebuild() {
+    let full = Rows::random(900, 16, 0xAB1E);
+    let q = query(16);
+    let rebuilt = results(&HnswIndex::new(), &full, &Slot::default(), &q, 20);
+
+    // Grown in three steps from the same rows.
+    let slot = Slot::default();
+    let index = HnswIndex::new();
+    for n in [300usize, 650, 900] {
+        let partial = Rows {
+            dimension: full.dimension,
+            rows: full.rows[..n].to_vec(),
+        };
+        let _ = results(&index, &partial, &slot, &q, 20);
+        assert_eq!(index.rows(), n);
+    }
+
+    let grown = results(&index, &full, &slot, &q, 20);
+    assert_eq!(
+        grown, rebuilt,
+        "a graph grown incrementally answered differently from one built in one go"
+    );
+}
+
+/// Extending must be far cheaper than rebuilding, or it is not worth the risk.
+#[test]
+fn extending_is_much_cheaper_than_rebuilding() {
+    let full = Rows::random(4000, 32, 0xC0DE);
+    let q = query(32);
+    let slot = Slot::default();
+    let index = HnswIndex::new();
+
+    let almost = Rows {
+        dimension: full.dimension,
+        rows: full.rows[..3990].to_vec(),
+    };
+    let started = std::time::Instant::now();
+    let _ = results(&index, &almost, &slot, &q, 10);
+    let build_time = started.elapsed();
+
+    // Ten more rows.
+    let started = std::time::Instant::now();
+    let _ = results(&index, &full, &slot, &q, 10);
+    let extend_time = started.elapsed();
+
+    println!("build {build_time:?}, extend by 10 {extend_time:?}");
+    assert!(
+        extend_time * 10 < build_time,
+        "extending by ten rows took {extend_time:?} against a build of {build_time:?}"
+    );
+}
+
+/// Rows that are not a continuation must force a rebuild, not be appended onto a wrong graph.
+#[test]
+fn a_reordered_source_is_rebuilt_rather_than_extended() {
+    let original = Rows::random(400, 16, 0x1234);
+    let q = query(16);
+    let slot = Slot::default();
+    let index = HnswIndex::new();
+    let _ = results(&index, &original, &slot, &q, 10);
+
+    // Same count, different rows in the leading positions — what compaction does.
+    let mut shuffled = Rows::random(400, 16, 0x1234);
+    shuffled.rows.reverse();
+    let got = results(&index, &shuffled, &slot, &q, 10);
+
+    let reference = results(&HnswIndex::new(), &shuffled, &Slot::default(), &q, 10);
+    assert_eq!(
+        got, reference,
+        "the graph was extended or reused across a reordering"
+    );
+}

@@ -114,6 +114,35 @@ impl Graph {
         links + self.rows.len() * (8 + 1 + 4)
     }
 
+    /// Whether this graph covers the first `self.len()` of `rows`, in the same order.
+    ///
+    /// When it does, the rest can simply be appended instead of rebuilding everything. This is
+    /// the common shape of a write to an append-only store: existing segments keep their rows at
+    /// their existing positions and a new segment adds more on the end.
+    ///
+    /// Deletes do not break it — a tombstoned row stays in the graph and is filtered at search
+    /// time by the live set. Compaction does break it, because it renumbers rows, and that is
+    /// correct: after a compaction the graph genuinely describes something that no longer exists.
+    pub(crate) fn is_prefix_of(
+        &self,
+        rows: &[(RowId, Vec<f32>, f32)],
+        dimension: usize,
+        metric: Metric,
+    ) -> bool {
+        if self.metric != Some(metric) || self.dimension != dimension {
+            return false;
+        }
+        if self.len() > rows.len() {
+            return false;
+        }
+        // Compared by row, not by count. Two collections can hold the same number of rows and
+        // not be the same rows at all.
+        self.rows
+            .iter()
+            .zip(rows.iter())
+            .all(|(have, (want, _, _))| have == want)
+    }
+
     /// Whether this graph can answer a query over `rows` rows of `dimension` under `metric`.
     ///
     /// Deliberately strict. A graph built for cosine ranks differently from one built for L2,

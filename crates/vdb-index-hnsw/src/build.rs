@@ -153,6 +153,27 @@ pub(crate) fn decode_rows(
     Ok(out)
 }
 
+/// Add rows to a graph that already covers everything before them.
+///
+/// A batch build *is* sequential insertion — `build_from` inserts one node at a time in the
+/// source's order — so appending in that same order produces exactly the graph a full rebuild
+/// would have produced. That equivalence is what makes this safe rather than an approximation of
+/// the real thing, and `extending_matches_a_full_rebuild` pins it.
+pub(crate) fn extend(
+    graph: &mut Graph,
+    rows: &[(vdb_core::document::RowId, Vec<f32>, f32)],
+    metric: Metric,
+    params: &HnswParams,
+) {
+    let mut visited = Visited::default();
+    graph.vectors.reserve(rows.len() * graph.dimension);
+    for (row, vector, inv_norm) in rows {
+        let level = level_for(*row, params);
+        let node = graph.push_node(*row, vector, *inv_norm, level);
+        insert(graph, node, metric, params, &mut visited);
+    }
+}
+
 /// Build a graph over rows already decoded.
 ///
 /// Rows are taken in the source's own stable order, which together with the hashed level
