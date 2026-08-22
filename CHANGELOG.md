@@ -32,6 +32,14 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
   `&[f32]` and a raw-bytes variant so bindings copy nothing), `Metadata` with dotted-path lookup
   and total resolution semantics, `DocId`/`RowId`, `DocumentInput`/`Document`, and the single
   limits table with validation for collection names, ids, dimensions, `top_k` and batch size.
+- `vdb-core` write path: an arena-backed `Memtable` with deterministic flush ordering; a
+  `WalWriter` that writes each transaction group in a single append so a commit record can never
+  become durable separately from what it commits; replay that distinguishes a torn tail from
+  damage; and `Durability` (`Full`/`Batch`/`Relaxed`, defaulting to `Batch`).
+- `vdb-testkit`: `FaultyStorage`, injecting crashes, torn writes, `ENOSPC`, transient errors and
+  dropped syncs at a chosen I/O operation.
+- The crash sweep: five fault classes swept across every mutating I/O operation in a workload,
+  asserting after each that recovery yields one of the legal committed prefixes.
 - CI: `ci-format` refuses a golden-fixture change without a declared `FORMAT-CHANGE:` and a
   `FORMAT_VERSION` bump; `nightly` runs each fuzz target for an hour and reports coverage.
 

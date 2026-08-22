@@ -13,5 +13,12 @@ authors.workspace = true
 # .github/workflows/ci-core-purity.yml. See docs/adr/README.md ADR-0004.
 vdb-format.workspace = true
 
+[dev-dependencies]
+# A dev-dependency cycle back onto this crate, which cargo permits. The alternative — putting
+# the engine's own recovery tests in the testkit — would put them further from the code they
+# guard.
+vdb-testkit.workspace = true
+vdb-storage-memory.workspace = true
+
 [lints]
 workspace = true

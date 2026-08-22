@@ -15,7 +15,9 @@
 #![warn(missing_docs)]
 
 pub mod conformance;
+pub mod fault;
 pub mod rng;
 
 pub use conformance::{storage_conformance, ConformanceReport};
+pub use fault::{Fault, FaultyStorage};
 pub use rng::Rng;

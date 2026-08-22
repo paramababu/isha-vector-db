@@ -55,7 +55,8 @@ Nothing at or below the public API knows which platform it is on. That is enforc
 | `vdb-storage-memory` + storage conformance suite | Done |
 | `vdb-format` — on-disk format v1, golden fixtures, fuzz targets | Done |
 | Data model: vectors, metadata, documents, ids, limits | Done |
-| Write path, WAL replay, manifest commit, recovery | Next |
+| Write path: memtable, WAL, replay, crash-sweep suite | Done |
+| Segment flush and manifest commit | Next |
 | `vdb-index-flat`, search, filters | Not started |
 | `vdb-storage-os` | Not started |
 | C ABI, SDKs, HNSW, web | Later phases |
