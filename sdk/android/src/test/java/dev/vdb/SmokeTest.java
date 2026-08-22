@@ -26,6 +26,7 @@ public final class SmokeTest {
       closingIsIdempotent(dir.resolve("closing").toString());
       lockIsExclusive(dir.resolve("lock").toString());
       persistence(dir.resolve("persist").toString());
+      metadataAndFilters(dir.resolve("filters").toString());
     } finally {
       deleteRecursively(dir);
     }
@@ -104,6 +105,67 @@ public final class SmokeTest {
       check("survived a reopen", c.contains("kept"));
       check("count survived", c.count() == 1);
     }
+  }
+
+  /** Metadata written from Java, and filters read back through it. */
+  static void metadataAndFilters(String path) {
+    try (Database db = Vdb.open(path);
+        Collection c = db.collection("docs", 2)) {
+      // Decreasing similarity to {1, 0}, so filtering is visible separately from ranking.
+      c.upsert("hammer", new float[] {1, 0},
+          Metadata.of().set("category", "tools").set("price", 25.0).set("sale", true));
+      c.upsert("saw", new float[] {0.95f, 0.31f},
+          Metadata.of().set("category", "tools").set("price", 75.0));
+      c.upsert("ball", new float[] {0.7f, 0.7f}, Metadata.of().set("category", "toys"));
+
+      check("unfiltered order", ids(c, null).equals(List.of("hammer", "saw", "ball")));
+      check("simple filter", ids(c, Filter.eq("category", "tools")).equals(List.of("hammer", "saw")));
+
+      Filter cheapTools = Filter.eq("category", "tools").and(Filter.lt("price", 50.0));
+      check("conjunction", ids(c, cheapTools).equals(List.of("hammer")));
+
+      Filter either = Filter.eq("category", "toys").or(Filter.gt("price", 50.0));
+      check("disjunction", ids(c, either).equals(List.of("saw", "ball")));
+
+      check("negation", ids(c, Filter.not(Filter.eq("category", "tools"))).equals(List.of("ball")));
+
+      // Three levels, in one expression.
+      Filter nested = Filter.any(
+          Filter.all(Filter.eq("category", "tools"),
+              Filter.any(Filter.lt("price", 50.0), Filter.eq("sale", true))),
+          Filter.eq("category", "toys"));
+      check("deep nesting", ids(c, nested).equals(List.of("hammer", "ball")));
+
+      // "ball" has no price.
+      check("exists", ids(c, Filter.exists("price")).equals(List.of("hammer", "saw")));
+      check("isNull", ids(c, Filter.isNull("price")).equals(List.of("ball")));
+      check("ne matches absent", ids(c, Filter.ne("price", 25L)).equals(List.of("saw", "ball")));
+
+      check("startsWith", ids(c, Filter.startsWith("category", "too")).equals(List.of("hammer", "saw")));
+      // A type mismatch is false, never an error.
+      check("type mismatch is empty", ids(c, Filter.eq("category", 1L)).isEmpty());
+
+      check("empty all matches everything", ids(c, Filter.all()).size() == 3);
+      check("empty any matches nothing", ids(c, Filter.any()).isEmpty());
+
+      // topK counts matches, not candidates.
+      check("topK counts matches",
+          c.search(new float[] {1, 0}, 2, Filter.eq("category", "toys")).size() == 1);
+
+      // And after a flush, out of a segment rather than the buffer.
+      c.flush();
+      check("filters after flush", ids(c, Filter.eq("category", "tools")).equals(List.of("hammer", "saw")));
+    }
+  }
+
+  static List<String> ids(Collection c, Filter filter) {
+    List<Collection.Hit> hits =
+        filter == null ? c.search(new float[] {1, 0}, 10) : c.search(new float[] {1, 0}, 10, filter);
+    List<String> out = new java.util.ArrayList<>(hits.size());
+    for (Collection.Hit hit : hits) {
+      out.add(hit.id());
+    }
+    return out;
   }
 
   // ---- tiny harness -------------------------------------------------------

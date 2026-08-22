@@ -125,6 +125,10 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
   `$and`/`$or`/`$not`, comparison operators, `$in`/`$nin`, `$exists`, `$startsWith` and
   `$contains`. Node binds the engine directly, so it takes the shape a JavaScript developer
   would write rather than the postfix builder the C bindings use.
+- **Filters and metadata in Java**: `Metadata.of().set(...)` for writing, and a `Filter` tree
+  with `and`/`or`/`not` that flattens to postfix on the way down. Plain classes rather than
+  sealed interfaces or records, because this ships to Android where those need a recent API
+  level or desugaring.
 - CI: `ci-format` refuses a golden-fixture change without a declared `FORMAT-CHANGE:` and a
   `FORMAT_VERSION` bump; `nightly` runs each fuzz target for an hour and reports coverage.
 

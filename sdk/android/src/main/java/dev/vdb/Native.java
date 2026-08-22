@@ -54,4 +54,39 @@ final class Native {
   static native float resultScore(long results, int index);
 
   static native void freeResult(long results);
+
+  // Value kinds, shared with the Rust side. One `metadataSet` and one `filterCompare` taking a
+  // tag rather than four near-identical natives each: JNI declarations are verbose on both
+  // sides, and a tag is cheaper to read than four signatures are to keep in step.
+  static final int VALUE_STRING = 1;
+  static final int VALUE_I64 = 2;
+  static final int VALUE_F64 = 3;
+  static final int VALUE_BOOL = 4;
+  static final int VALUE_NULL = 5;
+
+  static native long metadataNew();
+
+  static native void metadataFree(long metadata);
+
+  static native void metadataSet(
+      long metadata, String key, int kind, String text, long number, double real, boolean flag);
+
+  static native boolean upsertWithMetadata(
+      long collection, String id, float[] vector, long metadata);
+
+  static native long filterNew();
+
+  static native void filterFree(long filter);
+
+  static native void filterCompare(
+      long filter, String field, int op, int kind, String text, long number, double real,
+      boolean flag);
+
+  static native void filterUnary(long filter, String field, int predicate);
+
+  static native void filterCombine(long filter, int combinator, int count);
+
+  static native int filterDepth(long filter);
+
+  static native long searchFiltered(long collection, float[] query, int topK, long filter);
 }

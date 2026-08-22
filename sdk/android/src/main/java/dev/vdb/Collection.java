@@ -30,6 +30,20 @@ public final class Collection implements AutoCloseable {
     return Native.upsert(alive(), id, vector);
   }
 
+  /** Insert or replace, with metadata. Returns true when the document was new. */
+  public boolean upsert(String id, float[] vector, Metadata metadata) {
+    if (metadata == null || metadata.isEmpty()) {
+      return upsert(id, vector);
+    }
+    long handle = alive();
+    long native_ = metadata.toNative();
+    try {
+      return Native.upsertWithMetadata(handle, id, vector, native_);
+    } finally {
+      Native.metadataFree(native_);
+    }
+  }
+
   /** Remove a document. Returns whether it existed; removing an absent one is not an error. */
   public boolean delete(String id) {
     return Native.delete(alive(), id);
@@ -59,17 +73,44 @@ public final class Collection implements AutoCloseable {
   public List<Hit> search(float[] query, int topK) {
     long results = Native.search(alive(), query, topK);
     try {
-      int n = Native.resultCount(results);
-      List<Hit> hits = new ArrayList<>(n);
-      for (int i = 0; i < n; i++) {
-        hits.add(new Hit(Native.resultId(results, i), Native.resultScore(results, i)));
-      }
-      return hits;
+      return collect(results);
     } finally {
       // Freed here rather than left to the collector: a search result holds engine memory, and
       // a loop of searches would otherwise accumulate it until a GC nobody scheduled.
       Native.freeResult(results);
     }
+  }
+
+  /**
+   * Find the nearest documents whose metadata matches a filter.
+   *
+   * <p>{@code topK} counts <em>matches</em>, not candidates: a filter excluding most of the
+   * collection still returns up to {@code topK} results rather than however many happened to
+   * survive among the nearest few.
+   */
+  public List<Hit> search(float[] query, int topK, Filter filter) {
+    long collection = alive();
+    long built = filter.toNative();
+    try {
+      long results = Native.searchFiltered(collection, query, topK, built);
+      try {
+        return collect(results);
+      } finally {
+        Native.freeResult(results);
+      }
+    } finally {
+      Native.filterFree(built);
+    }
+  }
+
+  /** Turn a result handle into hits. */
+  private static List<Hit> collect(long results) {
+    int n = Native.resultCount(results);
+    List<Hit> hits = new ArrayList<>(n);
+    for (int i = 0; i < n; i++) {
+      hits.add(new Hit(Native.resultId(results, i), Native.resultScore(results, i)));
+    }
+    return hits;
   }
 
   /** Release the handle. The collection itself is unaffected. Idempotent. */

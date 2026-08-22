@@ -70,7 +70,8 @@ Nothing at or below the public API knows which platform it is on. That is enforc
 | iOS SDK (Swift + XCFramework) | Done |
 | Metadata filters across the C ABI and Swift | Done |
 | Filters in Node | Done |
-| Filters in Java; then Flutter, React Native, Web | Next |
+| Filters in Java, with metadata writing | Done |
+| Flutter, React Native, Web | Next |
 | `vdb-index-flat`, search, filters | Not started |
 | `vdb-storage-os` | Not started |
 | C ABI, SDKs, HNSW, web | Later phases |
@@ -159,8 +160,10 @@ loop. `using` closes the database even when an exception unwinds past your clean
 ```java
 try (Database db = Vdb.open(context.getNoBackupFilesDir() + "/vectors");
      Collection docs = db.collection("docs", 384, Vdb.Metric.COSINE)) {
-    docs.upsert("a", embedding);
-    for (Collection.Hit hit : docs.search(query, 10)) {
+    docs.upsert("a", embedding, Metadata.of().set("category", "tools").set("price", 25.0));
+
+    Filter cheapTools = Filter.eq("category", "tools").and(Filter.lt("price", 50.0));
+    for (Collection.Hit hit : docs.search(query, 10, cheapTools)) {
         Log.d("vdb", hit.id() + " " + hit.score());
     }
 }
