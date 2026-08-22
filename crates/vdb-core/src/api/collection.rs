@@ -9,12 +9,15 @@ use crate::api::{
     BatchOp, BatchReport, CollectionStats, Hit, SearchRequest, SearchResponse, SearchStats,
     WriteBatch,
 };
+use crate::api::{CollectionVerify, VerifyLevel};
 use crate::document::{DocId, Document, DocumentInput, Include};
 use crate::error::{ConflictError, NotFoundError, Result, TransactionError};
 use crate::filter::{self, Filter};
 use crate::index::{Budget, LiveSet, RowPredicate, SearchCtx, VectorIndex, VectorSource};
 use crate::metadata::Metadata;
-use crate::persistence::segment::{flush_memtable, list_segment_ids, remove_segment, SegmentData};
+use crate::persistence::segment::{
+    compact_segments, flush_memtable, list_segment_ids, remove_segment, SegmentData,
+};
 use crate::persistence::{layout, replay_into, wal::WalWriter};
 use crate::search::{distance_from_score, TopK};
 use crate::vector::{VectorDType, VectorView};
@@ -577,6 +580,194 @@ impl Collection {
         self.do_flush(state)
     }
 
+    /// Rewrite segments whose rows are mostly tombstones, reclaiming their space.
+    ///
+    /// Deletes and overwrites only mark rows dead; the bytes stay until compaction. This is the
+    /// operation that actually removes them, and it is explicit rather than automatic: rewriting
+    /// hundreds of megabytes is a decision about when to spend I/O and battery, which the
+    /// application is in a far better position to make than the engine. [`CollectionStats::
+    /// dead_ratio`](crate::api::CollectionStats::dead_ratio) is how it decides.
+    ///
+    /// # Errors
+    /// Any storage error.
+    pub fn compact(&self, options: CompactOptions) -> Result<CompactReport> {
+        self.db.check_writable("compact")?;
+        let mut state = self.write_state()?;
+        let storage = self.db.storage.as_ref();
+        let catalog = &self.inner.catalog;
+
+        let chosen: Vec<usize> = state
+            .segments
+            .iter()
+            .enumerate()
+            .filter(|(_, seg)| {
+                let rows = seg.rows();
+                if rows == 0 {
+                    return true;
+                }
+                let dead = f64::from(rows - seg.live_count()) / f64::from(rows);
+                dead >= f64::from(options.min_dead_ratio)
+            })
+            .map(|(i, _)| i)
+            .collect();
+
+        if chosen.is_empty() {
+            return Ok(CompactReport::default());
+        }
+
+        let sources: Vec<&SegmentData> = chosen
+            .iter()
+            .filter_map(|i| state.segments.get(*i))
+            .collect();
+        let reclaimed_rows: u64 = sources
+            .iter()
+            .map(|s| u64::from(s.rows() - s.live_count()))
+            .sum();
+        let old_ids: Vec<u64> = sources.iter().map(|s| s.id).collect();
+        let new_id = state.next_segment_id;
+
+        let result = compact_segments(storage, catalog, new_id, &sources)?;
+
+        // Build the new segment list: everything untouched, plus the rewrite.
+        let mut refs: Vec<SegmentRef> = Vec::new();
+        let mut kept: Vec<SegmentData> = Vec::new();
+        for (index, seg) in state.segments.drain(..).enumerate() {
+            if chosen.contains(&index) {
+                continue;
+            }
+            refs.push(SegmentRef {
+                id: seg.id,
+                rows: seg.rows(),
+                del_generation: seg.tombstones().generation,
+            });
+            kept.push(seg);
+        }
+        if result.segment.rows > 0 {
+            kept.push(SegmentData::open(storage, catalog, &result.segment)?);
+            refs.push(result.segment);
+        } else {
+            remove_segment(storage, &catalog.name, new_id)?;
+        }
+        refs.sort_by_key(|s| s.id);
+        kept.sort_by_key(|s| s.id);
+        state.segments = kept;
+        state.next_segment_id = new_id + 1;
+
+        let total_rows: u64 = refs.iter().map(|s| u64::from(s.rows)).sum();
+        let live: u64 = state
+            .segments
+            .iter()
+            .map(|s| u64::from(s.live_count()))
+            .sum();
+        self.db.commit_collection(CollectionEntry {
+            name: catalog.name.clone(),
+            segments: refs,
+            index_snapshot: None,
+            last_applied_wal: state.wal.next_sequence(),
+            live_count: live,
+            total_rows,
+        })?;
+
+        // Only after the manifest no longer names them. A crash before this point leaves the old
+        // files referenced and intact; after it, they are orphans the next open removes.
+        for id in &old_ids {
+            remove_segment(storage, &catalog.name, *id)?;
+        }
+
+        Ok(CompactReport {
+            segments_rewritten: old_ids.len(),
+            segments_created: usize::from(result.segment.rows > 0),
+            rows_reclaimed: reclaimed_rows,
+        })
+    }
+
+    /// Check this collection's integrity.
+    ///
+    /// # Errors
+    /// Any storage error. Damage is reported in the returned [`CollectionVerify`] and the
+    /// accompanying problem lists, not raised — a verification that stops at the first fault
+    /// cannot tell you how bad things are.
+    pub fn verify(
+        &self,
+        level: VerifyLevel,
+        errors: &mut Vec<String>,
+        warnings: &mut Vec<String>,
+    ) -> Result<CollectionVerify> {
+        self.db.check_open()?;
+        let state = self.read_state()?;
+        let storage = self.db.storage.as_ref();
+        let name = self.name();
+
+        let mut live_documents = 0u64;
+        let mut total_rows = 0u64;
+        let mut seen: std::collections::HashSet<DocId> = std::collections::HashSet::new();
+
+        for seg in &state.segments {
+            total_rows += u64::from(seg.rows());
+            live_documents += u64::from(seg.live_count());
+
+            if level >= VerifyLevel::Checksums {
+                if let Err(e) = seg.verify_checksums(storage, name) {
+                    errors.push(format!("{name}: segment {}: {e}", seg.id));
+                }
+            }
+            if level >= VerifyLevel::Full {
+                for row in 0..seg.rows() {
+                    if !seg.is_live(row) {
+                        continue;
+                    }
+                    match seg.id_at(row) {
+                        Some(id) => {
+                            // A document live in two segments would be returned twice by a
+                            // search, with two different vectors. Superseding on flush is what
+                            // prevents it; this is the check that the invariant actually holds.
+                            if !seen.insert(id.clone()) {
+                                errors.push(format!(
+                                    "{name}: document {:?} is live in more than one segment",
+                                    id.display()
+                                ));
+                            }
+                        }
+                        None => {
+                            errors.push(format!("{name}: segment {} row {row} has no id", seg.id))
+                        }
+                    }
+                    if let Err(e) = seg.meta_record(row) {
+                        errors.push(format!(
+                            "{name}: segment {} row {row}: unreadable metadata: {e}",
+                            seg.id
+                        ));
+                    }
+                }
+            }
+        }
+
+        // Files nothing references. Not damage — an interrupted flush leaves them, and the next
+        // open removes them — but worth surfacing, since a pile of them means flushes keep dying.
+        let referenced: Vec<u64> = state.segments.iter().map(|s| s.id).collect();
+        for id in list_segment_ids(storage, name)? {
+            if !referenced.contains(&id) {
+                warnings.push(format!("{name}: segment {id} is on disk but unreferenced"));
+            }
+        }
+        if total_rows > 0 {
+            let dead = (total_rows - live_documents) as f64 / total_rows as f64;
+            if dead > 0.5 {
+                warnings.push(format!(
+                    "{name}: {:.0}% of rows are tombstones; compaction would reclaim them",
+                    dead * 100.0
+                ));
+            }
+        }
+
+        Ok(CollectionVerify {
+            name: name.to_owned(),
+            segments_checked: state.segments.len(),
+            live_documents: live_count(&state),
+            total_rows,
+        })
+    }
+
     /// Counters for this collection.
     ///
     /// # Errors
@@ -1014,4 +1205,51 @@ impl RowPredicate for CompiledFilter<'_> {
         let metadata = self.source.metadata(row)?;
         Ok(filter::matches(self.filter, &metadata))
     }
+}
+
+/// How aggressively to compact.
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
+pub struct CompactOptions {
+    /// Rewrite a segment once at least this fraction of its rows are tombstones.
+    ///
+    /// The default of 0.3 is a guess at the point where reclaiming space is worth rewriting the
+    /// segment, and it is a guess until the benchmark suite has something to say about it.
+    pub min_dead_ratio: f32,
+}
+
+impl Default for CompactOptions {
+    fn default() -> Self {
+        Self {
+            min_dead_ratio: 0.3,
+        }
+    }
+}
+
+impl CompactOptions {
+    /// Rewrite every segment, whatever its dead ratio.
+    pub fn everything() -> Self {
+        Self {
+            min_dead_ratio: 0.0,
+        }
+    }
+
+    /// Rewrite segments at or above this dead ratio.
+    #[must_use]
+    pub fn min_dead_ratio(mut self, ratio: f32) -> Self {
+        self.min_dead_ratio = ratio;
+        self
+    }
+}
+
+/// What compaction did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub struct CompactReport {
+    /// Segments read and dropped.
+    pub segments_rewritten: usize,
+    /// Segments written in their place. Zero when everything in them was dead.
+    pub segments_created: usize,
+    /// Tombstoned rows removed from disk.
+    pub rows_reclaimed: u64,
 }

@@ -502,3 +502,299 @@ fn a_dead_row_cannot_be_read_back_by_index() {
     );
     assert_eq!(seg.live_count(), 0);
 }
+
+// ---------------------------------------------------------------------------
+// compaction and verification, through the public API
+// ---------------------------------------------------------------------------
+
+mod maintenance {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
+    use std::sync::Arc;
+
+    use vdb_core::api::{
+        CollectionSpec, CompactOptions, Database, DatabaseConfig, SearchRequest, VerifyLevel,
+    };
+    use vdb_core::clock::ManualClock;
+    use vdb_core::document::{DocId, DocumentInput};
+    use vdb_core::metadata::{Metadata, Value};
+    use vdb_core::vector::VectorView;
+    use vdb_core::Metric;
+    use vdb_storage_memory::MemoryStorage;
+
+    fn open(mem: &MemoryStorage) -> Database {
+        Database::open(
+            Arc::new(mem.clone()),
+            DatabaseConfig::default(),
+            Arc::new(ManualClock::default()),
+        )
+        .unwrap()
+    }
+
+    /// A collection with `total` documents, all flushed, then `deleted` of them removed.
+    fn populated(db: &Database, total: usize, deleted: usize) -> vdb_core::api::Collection {
+        let c = db
+            .create_collection(CollectionSpec::new("docs", 2, Metric::Cosine))
+            .unwrap();
+        for i in 0..total {
+            let angle = i as f32 * core::f32::consts::TAU / total as f32;
+            let mut meta = Metadata::new();
+            meta.insert("index", Value::I64(i as i64));
+            c.insert(
+                DocumentInput::new(
+                    format!("doc-{i:03}"),
+                    VectorView::f32(&[angle.cos(), angle.sin()]),
+                )
+                .with_metadata(meta),
+            )
+            .unwrap();
+        }
+        c.flush().unwrap();
+        for i in 0..deleted {
+            c.delete(format!("doc-{i:03}")).unwrap();
+        }
+        c.flush().unwrap();
+        c
+    }
+
+    #[test]
+    fn compaction_reclaims_dead_rows_without_changing_what_is_stored() {
+        let mem = MemoryStorage::new();
+        let db = open(&mem);
+        let c = populated(&db, 20, 15);
+
+        let before = c.stats().unwrap();
+        assert_eq!(before.live_documents, 5);
+        assert_eq!(before.total_rows, 20);
+        assert!(before.dead_ratio > 0.7);
+
+        let survivors = c.ids().unwrap();
+        let before_hits = c
+            .search(&SearchRequest::new(VectorView::f32(&[1.0, 0.0]), 5))
+            .unwrap()
+            .ids();
+
+        let report = c.compact(CompactOptions::default()).unwrap();
+        assert_eq!(report.segments_rewritten, 1);
+        assert_eq!(report.segments_created, 1);
+        assert_eq!(report.rows_reclaimed, 15);
+
+        let after = c.stats().unwrap();
+        assert_eq!(
+            after.live_documents, 5,
+            "compaction must not lose a document"
+        );
+        assert_eq!(after.total_rows, 5, "the dead rows should be gone");
+        assert_eq!(after.dead_ratio, 0.0);
+
+        // Nothing observable changed: same documents, same ranking, same metadata.
+        assert_eq!(c.ids().unwrap(), survivors);
+        assert_eq!(
+            c.search(&SearchRequest::new(VectorView::f32(&[1.0, 0.0]), 5))
+                .unwrap()
+                .ids(),
+            before_hits
+        );
+        let doc = c.get(&survivors[0]).unwrap().unwrap();
+        assert!(
+            doc.metadata.get("index").is_some(),
+            "metadata must survive compaction"
+        );
+        db.close().unwrap();
+    }
+
+    #[test]
+    fn compaction_leaves_healthy_segments_alone() {
+        let mem = MemoryStorage::new();
+        let db = open(&mem);
+        let c = populated(&db, 20, 1);
+        let report = c.compact(CompactOptions::default()).unwrap();
+        assert_eq!(
+            report.segments_rewritten, 0,
+            "5% dead is not worth rewriting"
+        );
+        assert_eq!(c.stats().unwrap().total_rows, 20);
+
+        // Unless asked to rewrite everything.
+        let report = c.compact(CompactOptions::everything()).unwrap();
+        assert_eq!(report.segments_rewritten, 1);
+        assert_eq!(c.stats().unwrap().total_rows, 19);
+        db.close().unwrap();
+    }
+
+    #[test]
+    fn compacting_an_entirely_dead_segment_removes_it_completely() {
+        let mem = MemoryStorage::new();
+        let db = open(&mem);
+        let c = populated(&db, 10, 10);
+        let report = c.compact(CompactOptions::default()).unwrap();
+        assert_eq!(
+            report.segments_created, 0,
+            "nothing survived, so nothing is written"
+        );
+        let stats = c.stats().unwrap();
+        assert_eq!(stats.segments, 0);
+        assert_eq!(stats.total_rows, 0);
+        assert_eq!(c.count().unwrap(), 0);
+        db.close().unwrap();
+    }
+
+    #[test]
+    fn compaction_survives_a_reopen_and_leaves_no_orphans() {
+        let mem = MemoryStorage::new();
+        {
+            let db = open(&mem);
+            let c = populated(&db, 30, 20);
+            c.compact(CompactOptions::default()).unwrap();
+            db.close().unwrap();
+        }
+        let db = open(&mem);
+        let c = db.open_collection("docs").unwrap();
+        assert_eq!(c.count().unwrap(), 10);
+        assert_eq!(c.stats().unwrap().total_rows, 10);
+
+        let report = db.verify(VerifyLevel::Full).unwrap();
+        assert!(report.is_clean(), "{:?}", report.errors);
+        assert!(
+            report.warnings.iter().all(|w| !w.contains("unreferenced")),
+            "compaction left orphan files: {:?}",
+            report.warnings
+        );
+        db.close().unwrap();
+    }
+
+    #[test]
+    fn compacting_an_empty_collection_does_nothing() {
+        let mem = MemoryStorage::new();
+        let db = open(&mem);
+        let c = db
+            .create_collection(CollectionSpec::new("docs", 2, Metric::Cosine))
+            .unwrap();
+        assert_eq!(
+            c.compact(CompactOptions::everything())
+                .unwrap()
+                .segments_rewritten,
+            0
+        );
+        db.close().unwrap();
+    }
+
+    #[test]
+    fn verify_is_clean_on_a_healthy_database() {
+        let mem = MemoryStorage::new();
+        let db = open(&mem);
+        populated(&db, 10, 2);
+        for level in [
+            VerifyLevel::Quick,
+            VerifyLevel::Checksums,
+            VerifyLevel::Full,
+        ] {
+            let report = db.verify(level).unwrap();
+            assert!(report.is_clean(), "{level:?}: {:?}", report.errors);
+            assert_eq!(report.level, level);
+            assert_eq!(report.collections.len(), 1);
+            assert_eq!(report.collections[0].live_documents, 8);
+        }
+        db.close().unwrap();
+    }
+
+    /// The point of `Checksums`: damage that `Quick` cannot see, because it never reads the
+    /// bytes.
+    #[test]
+    fn verify_detects_bit_rot_that_a_quick_check_cannot() {
+        let mem = MemoryStorage::new();
+        let db = open(&mem);
+        populated(&db, 10, 0);
+
+        let vec_path = mem
+            .file_paths()
+            .into_iter()
+            .find(|p| p.ends_with(".vec"))
+            .expect("a vector file should exist");
+        let path = vdb_core::path::DbPath::parse(&vec_path).unwrap();
+        let mut bytes = mem.read_all(&path).unwrap();
+        let n = bytes.len();
+        bytes[n - 10] ^= 0xFF;
+        mem.write_all(&path, bytes);
+
+        assert!(
+            db.verify(VerifyLevel::Quick).unwrap().is_clean(),
+            "Quick does not read bytes"
+        );
+        let deep = db.verify(VerifyLevel::Checksums).unwrap();
+        assert!(
+            !deep.is_clean(),
+            "Checksums should have caught the flipped bit"
+        );
+        assert!(deep.errors[0].contains("checksum"), "{:?}", deep.errors);
+        db.close().unwrap();
+    }
+
+    #[test]
+    fn verify_warns_about_orphan_files_without_calling_them_damage() {
+        let mem = MemoryStorage::new();
+        let db = open(&mem);
+        let c = populated(&db, 5, 0);
+        c.flush().unwrap();
+
+        // A file from an interrupted flush: named by nothing.
+        let ghost = vdb_core::path::DbPath::parse("collections/docs/segments/000099.vec").unwrap();
+        mem.write_all(&ghost, b"junk".to_vec());
+
+        let report = db.verify(VerifyLevel::Full).unwrap();
+        assert!(
+            report.is_clean(),
+            "an orphan is not damage: {:?}",
+            report.errors
+        );
+        assert!(
+            report.warnings.iter().any(|w| w.contains("unreferenced")),
+            "{:?}",
+            report.warnings
+        );
+        db.close().unwrap();
+    }
+
+    #[test]
+    fn verify_warns_when_most_rows_are_tombstones() {
+        let mem = MemoryStorage::new();
+        let db = open(&mem);
+        populated(&db, 20, 18);
+        let report = db.verify(VerifyLevel::Quick).unwrap();
+        assert!(
+            report.warnings.iter().any(|w| w.contains("compaction")),
+            "{:?}",
+            report.warnings
+        );
+        db.close().unwrap();
+    }
+
+    /// The invariant that a document is live in at most one segment. Superseding on flush is
+    /// what maintains it; this is the check that it actually holds.
+    #[test]
+    fn verify_would_catch_a_document_live_in_two_segments() {
+        let mem = MemoryStorage::new();
+        let db = open(&mem);
+        let c = db
+            .create_collection(CollectionSpec::new("docs", 2, Metric::Cosine))
+            .unwrap();
+        c.insert(DocumentInput::new("a", VectorView::f32(&[1.0, 0.0])))
+            .unwrap();
+        c.flush().unwrap();
+        c.upsert(DocumentInput::new("a", VectorView::f32(&[0.0, 1.0])))
+            .unwrap();
+        c.flush().unwrap();
+
+        let report = db.verify(VerifyLevel::Full).unwrap();
+        assert!(
+            report.is_clean(),
+            "supersede-on-flush should keep this clean: {:?}",
+            report.errors
+        );
+        assert_eq!(
+            c.get(&DocId::from("a")).unwrap().unwrap().id,
+            DocId::from("a")
+        );
+        db.close().unwrap();
+    }
+}

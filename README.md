@@ -61,7 +61,8 @@ Nothing at or below the public API knows which platform it is on. That is enforc
 | Search: metrics, top-K, exact scan | Done |
 | Metadata filters | Done |
 | `vdb-storage-os`: the real filesystem backend | Done |
-| CLI, benchmarks, then the C ABI | Next |
+| Compaction, verification, `vdb` CLI | Done |
+| Benchmarks, then SIMD kernels, then the C ABI | Next |
 | `vdb-index-flat`, search, filters | Not started |
 | `vdb-storage-os` | Not started |
 | C ABI, SDKs, HNSW, web | Later phases |
@@ -117,6 +118,20 @@ cargo fmt --all --check
 ```
 
 Rust 1.78 or newer. The workspace has no third-party dependencies.
+
+## The `vdb` tool
+
+```bash
+cargo run -p vdb-cli --example demo -- /tmp/vdb-demo   # build something to look at
+cargo run -p vdb-cli -- stats   /tmp/vdb-demo
+cargo run -p vdb-cli -- verify  /tmp/vdb-demo --full
+cargo run -p vdb-cli -- compact /tmp/vdb-demo
+cargo run -p vdb-cli -- get     /tmp/vdb-demo products doc-0999
+```
+
+`stats`, `inspect`, `verify` and `get` open read-only and take no lock, so they work on a
+database an application currently has open. `verify` exits `3` when it finds damage, distinct
+from `1` for "could not run", so a script can tell the difference.
 
 ## Contributing
 

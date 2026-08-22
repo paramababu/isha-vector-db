@@ -10,10 +10,12 @@ mod config;
 mod database;
 mod search;
 mod stats;
+mod verify;
 
 pub use batch::{BatchOp, BatchReport, WriteBatch};
-pub use collection::{Collection, Snapshot, UpsertOutcome};
+pub use collection::{Collection, CompactOptions, CompactReport, Snapshot, UpsertOutcome};
 pub use config::{CollectionSpec, DatabaseConfig};
 pub use database::{CollectionInfo, Database};
 pub use search::{Hit, SearchRequest, SearchResponse, SearchStats};
 pub use stats::{CollectionStats, DatabaseStats};
+pub use verify::{CollectionVerify, VerifyLevel, VerifyReport};

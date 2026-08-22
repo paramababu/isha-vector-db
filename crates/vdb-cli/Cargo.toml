@@ -1,0 +1,24 @@
+[package]
+name = "vdb-cli"
+description = "Command-line tool for inspecting, verifying and compacting vdb databases."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "vdb"
+path = "src/main.rs"
+
+[dependencies]
+vdb-core.workspace = true
+vdb-format.workspace = true
+vdb-storage-os.workspace = true
+
+[dev-dependencies]
+vdb-storage-os.workspace = true
+
+[lints]
+workspace = true

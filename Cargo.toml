@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/vdb-cli",
     "crates/vdb-core",
     "crates/vdb-format",
     "crates/vdb-index-flat",

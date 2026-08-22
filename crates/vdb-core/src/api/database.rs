@@ -7,7 +7,10 @@ use std::sync::{Arc, Mutex, RwLock};
 use vdb_format::{Catalog, CollectionEntry, Manifest};
 
 use crate::api::collection::{CollInner, Collection};
-use crate::api::{CollectionSpec, DatabaseConfig, DatabaseStats};
+use crate::api::{
+    CollectionSpec, CompactOptions, CompactReport, DatabaseConfig, DatabaseStats, VerifyLevel,
+    VerifyReport,
+};
 use crate::clock::Clock;
 use crate::error::{ConflictError, CorruptionError, LifecycleError, NotFoundError, Result};
 use crate::persistence::segment::{read_catalog, write_catalog};
@@ -108,7 +111,7 @@ impl Database {
                 Ok(l) => Some(l),
                 Err(e) => {
                     return Err(LifecycleError::DatabaseAlreadyOpen {
-                        path: storage.name().to_owned(),
+                        path: storage.describe(),
                         holder: Some(e.to_string()),
                     }
                     .into())
@@ -121,7 +124,7 @@ impl Database {
             None => {
                 if !config.create_if_missing {
                     return Err(LifecycleError::DatabaseNotFound {
-                        path: storage.name().to_owned(),
+                        path: storage.describe(),
                     }
                     .into());
                 }
@@ -390,6 +393,96 @@ impl Database {
             self.open_collection(&name)?.flush()?;
         }
         Ok(())
+    }
+
+    /// Check the database's integrity.
+    ///
+    /// Reports rather than repairs. Deciding what to discard is not a choice a library should
+    /// make silently on someone's behalf; a report is what makes the choice possible.
+    ///
+    /// # Errors
+    /// Any storage error that prevents verification from running at all. Damage found *by*
+    /// verification appears in the report — stopping at the first fault would leave the caller
+    /// unable to tell a single bad block from a wholly lost database.
+    pub fn verify(&self, level: VerifyLevel) -> Result<VerifyReport> {
+        self.inner.check_open()?;
+        let mut errors = Vec::new();
+        let mut warnings = Vec::new();
+        let mut collections = Vec::new();
+
+        let manifest = self.inner.manifest_snapshot()?;
+        for entry in &manifest.collections {
+            let coll = self.open_collection(&entry.name)?;
+            let result = coll.verify(level, &mut errors, &mut warnings)?;
+
+            // The manifest's counters are a cache of what the segments actually hold. A
+            // disagreement is not itself data loss, but it means one of the two is stale, and
+            // every decision made from the cheap number — whether to compact, what to report as
+            // a document count — is then wrong.
+            if entry.live_count != result.live_documents {
+                warnings.push(format!(
+                    "{}: manifest says {} live documents, segments hold {}",
+                    entry.name, entry.live_count, result.live_documents
+                ));
+            }
+            if entry.total_rows != result.total_rows {
+                errors.push(format!(
+                    "{}: manifest says {} rows, segments hold {}",
+                    entry.name, entry.total_rows, result.total_rows
+                ));
+            }
+            collections.push(result);
+        }
+
+        // Directories under `collections/` that the manifest does not name. A dropped collection
+        // whose deletion was interrupted leaves one, and so does a manual copy gone wrong.
+        let dir = layout::collections_dir()?;
+        if self.inner.storage.exists(&dir)? {
+            let named: Vec<&str> = manifest
+                .collections
+                .iter()
+                .map(|c| c.name.as_str())
+                .collect();
+            for entry in self.inner.storage.list_dir(&dir)? {
+                if !named.contains(&entry.name.as_str()) {
+                    warnings.push(format!(
+                        "collections/{} is on disk but named by no manifest",
+                        entry.name
+                    ));
+                }
+            }
+        }
+
+        Ok(VerifyReport {
+            level,
+            collections,
+            errors,
+            warnings,
+        })
+    }
+
+    /// Compact every collection.
+    ///
+    /// # Errors
+    /// Any storage error.
+    pub fn compact(&self, options: CompactOptions) -> Result<CompactReport> {
+        self.inner.check_writable("compact")?;
+        let names: Vec<String> = self
+            .inner
+            .collections
+            .read()
+            .map_err(|_| crate::internal_error!("collection registry poisoned"))?
+            .keys()
+            .cloned()
+            .collect();
+        let mut total = CompactReport::default();
+        for name in names {
+            let report = self.open_collection(&name)?.compact(options)?;
+            total.segments_rewritten += report.segments_rewritten;
+            total.segments_created += report.segments_created;
+            total.rows_reclaimed += report.rows_reclaimed;
+        }
+        Ok(total)
     }
 
     /// Database-wide counters.

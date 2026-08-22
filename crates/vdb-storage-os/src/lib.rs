@@ -113,6 +113,10 @@ impl Storage for OsStorage {
         "os"
     }
 
+    fn describe(&self) -> String {
+        self.root.display().to_string()
+    }
+
     fn capabilities(&self) -> StorageCapabilities {
         StorageCapabilities::minimal()
             .with_atomic_rename(true)

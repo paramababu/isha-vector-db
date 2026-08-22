@@ -18,7 +18,7 @@ use vdb_format::segment::{
     Directory, DirectoryWriter, MetaBlock, MetaRecord, MetaWriter, RowEntry, Tombstones,
     VectorBlock, VectorBlockWriter,
 };
-use vdb_format::{Catalog, SegmentRef};
+use vdb_format::{Catalog, FileKind, SegmentRef};
 
 use crate::document::{DocId, Document, Include};
 use crate::error::{from_format_at, CorruptionError, Result};
@@ -154,6 +154,95 @@ pub fn flush_memtable(
             del_generation: 0,
         },
         pending_deletions: memtable.deleted_ids().into_iter().cloned().collect(),
+    })
+}
+
+/// Rewrite the live rows of several segments into one new segment.
+///
+/// The rows are copied verbatim — same bytes, same cached norms — so compaction cannot change
+/// what a search returns. Only the dead rows disappear.
+///
+/// Written but not committed: the caller commits a manifest naming the new segment and dropping
+/// the old ones, and only then deletes the old files. A crash before the commit leaves the new
+/// segment as an orphan; a crash after it leaves the old ones as orphans. Both are cleaned up on
+/// the next open, and neither is ever visible as data.
+///
+/// # Errors
+/// Any storage or format error.
+pub fn compact_segments(
+    storage: &dyn Storage,
+    catalog: &Catalog,
+    new_id: u64,
+    sources: &[&SegmentData],
+) -> Result<FlushResult> {
+    let name = &catalog.name;
+    storage.create_dir_all(&layout::segments_dir(name)?)?;
+
+    let stride = catalog.row_stride();
+    let mut vectors = VectorBlockWriter::new(catalog.dimension, stride)
+        .map_err(|e| from_format_at(e, &DbPath::root()))?;
+    let mut directory = DirectoryWriter::new();
+    let mut meta = MetaWriter::new();
+
+    for seg in sources {
+        let block = seg.vectors()?;
+        for row in 0..seg.rows() {
+            if !seg.is_live(row) {
+                continue;
+            }
+            let (Some(bytes), Some(id), Some(inv_norm)) =
+                (block.row(row), seg.id_at(row), seg.inv_norm(row))
+            else {
+                return Err(crate::internal_error!(
+                    "segment {} row {row} is live but incomplete",
+                    seg.id
+                ));
+            };
+            vectors
+                .push_row(bytes)
+                .map_err(|e| from_format_at(e, &DbPath::root()))?;
+            let record = seg.meta_record(row)?;
+            let (offset, len) = meta
+                .push(&record)
+                .map_err(|e| from_format_at(e, &DbPath::root()))?;
+            directory
+                .push(&id.to_bytes(), offset, len, inv_norm)
+                .map_err(|e| from_format_at(e, &DbPath::root()))?;
+        }
+    }
+
+    let rows = vectors.rows();
+    let tombstones = Tombstones::all_live(rows, 0);
+    write_segment_file(
+        storage,
+        name,
+        new_id,
+        SegmentFile::Vectors,
+        &vectors.finish(),
+    )?;
+    write_segment_file(
+        storage,
+        name,
+        new_id,
+        SegmentFile::Directory,
+        &directory.finish(),
+    )?;
+    write_segment_file(storage, name, new_id, SegmentFile::Metadata, &meta.finish())?;
+    write_segment_file(
+        storage,
+        name,
+        new_id,
+        SegmentFile::Tombstones,
+        &tombstones.encode(),
+    )?;
+
+    Ok(FlushResult {
+        segment: SegmentRef {
+            id: new_id,
+            rows,
+            del_generation: 0,
+        },
+        pending_deletions: Vec::new(),
     })
 }
 
@@ -363,6 +452,54 @@ impl SegmentData {
             &self.tombstones.encode(),
         )?;
         Ok(self.tombstones.generation)
+    }
+
+    /// A row's stored record, metadata and content together.
+    ///
+    /// Used by compaction, which must carry both across verbatim.
+    ///
+    /// # Errors
+    /// [`CorruptionError`] if the directory points outside the metadata file.
+    pub fn meta_record(&self, row: u32) -> Result<MetaRecord> {
+        let Some(entry) = self.entries.get(row as usize) else {
+            return Ok(MetaRecord::default());
+        };
+        if entry.meta_len == 0 {
+            return Ok(MetaRecord::default());
+        }
+        let block =
+            MetaBlock::open(&self.meta_bytes).map_err(|e| from_format_at(e, &DbPath::root()))?;
+        block
+            .record(entry)
+            .map_err(|e| from_format_at(e, &DbPath::root()))
+    }
+
+    /// Verify every checksum in this segment's files.
+    ///
+    /// Not done on open — reading a whole vector block to answer "may I open this?" would make
+    /// startup unusable on a large collection — so it is a separate, explicit operation.
+    ///
+    /// # Errors
+    /// [`CorruptionError::ChecksumMismatch`] naming the file that failed.
+    pub fn verify_checksums(&self, storage: &dyn Storage, collection: &str) -> Result<()> {
+        for which in SegmentFile::ALL {
+            let path = layout::segment_file(collection, self.id, which)?;
+            let Some(bytes) = read_file(storage, &path)? else {
+                return Err(CorruptionError::MissingSegment {
+                    collection: collection.to_owned(),
+                    segment: self.id,
+                }
+                .into());
+            };
+            let kind = match which {
+                SegmentFile::Vectors => FileKind::Vectors,
+                SegmentFile::Directory => FileKind::Directory,
+                SegmentFile::Metadata => FileKind::Metadata,
+                SegmentFile::Tombstones => FileKind::Deleted,
+            };
+            vdb_format::verify_block(&bytes, kind).map_err(|e| from_format_at(e, &path))?;
+        }
+        Ok(())
     }
 
     /// Read just a row's metadata.

@@ -85,6 +85,18 @@ pub trait Storage: Debug + Send + Sync {
     /// A short name for this backend, used in error messages.
     fn name(&self) -> &'static str;
 
+    /// Where this backend keeps its data, in whatever terms make sense for it.
+    ///
+    /// A filesystem backend returns a path; an in-memory one returns something like
+    /// `"memory"`; a browser one might return an origin. The engine never interprets it — it
+    /// only passes it through to errors, so that "no database at /Users/me/app/data" reaches
+    /// the user instead of "no database at os".
+    ///
+    /// Defaults to [`Storage::name`], so a backend that has nothing useful to add says nothing.
+    fn describe(&self) -> String {
+        self.name().to_owned()
+    }
+
     /// What this backend can actually do. Must be honest; the conformance suite verifies it.
     fn capabilities(&self) -> StorageCapabilities;
 

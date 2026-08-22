@@ -70,6 +70,17 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
   directory syncing so a rename is durable, and `flock`-based advisory locking that the kernel
   releases when a process dies. Passes the same conformance suite as the in-memory backend,
   unchanged, and runs the crash sweep against a real disk.
+- **Compaction**: `Collection::compact` / `Database::compact` rewrite segments whose rows are
+  mostly tombstones, reclaiming their space. Explicit rather than automatic, because rewriting
+  hundreds of megabytes is a decision about I/O and battery the application is better placed to
+  make.
+- **Verification**: `Database::verify` at `Quick`, `Checksums` or `Full`. Reports rather than
+  repairs, and never stops at the first fault — a verification that gives up cannot tell you how
+  bad things are.
+- **`vdb` CLI**: `stats`, `inspect`, `verify`, `compact`, `get`, `version`. Read-only by default,
+  so it works on a database an application has open; distinct exit codes for damage versus
+  failure to run.
+- `Storage::describe` so errors name the actual location rather than the backend's type name.
 - CI: `ci-format` refuses a golden-fixture change without a declared `FORMAT-CHANGE:` and a
   `FORMAT_VERSION` bump; `nightly` runs each fuzz target for an hour and reports coverage.
 
