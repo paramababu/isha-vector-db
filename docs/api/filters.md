@@ -148,23 +148,39 @@ Two skipped keys cost ~2.1 ms across 50,000 rows, about **22 ns per key walked p
 with ten metadata fields and a filter on the last of them would spend roughly four times a
 distance computation on the lookup alone.
 
-That measurement decides between the two candidate fixes, which is why it was worth taking
-before building either:
+That measurement decided between the two candidate fixes, which is why it was worth taking
+before building either.
 
-- **A field offset table** in the metadata record turns the walk into a seek. The numbers say
-  this is worth doing, and worth more the more fields a document has. It requires a format
-  version bump, so it belongs before 1.0 freezes the format.
+**The field offset table was built, and shipped in format v2** ([ADR-0014](../adr/0014-metadata-offset-table.md)).
+A map of eight fields or more now carries a table of `u16` offsets that `find_path`
+binary-searches instead of walking. Records below eight fields — including the three-field ones
+measured above — are unchanged.
+
+It did not do quite what this document predicted. Measured on the same machine, comparing both
+encodings of a sixteen-field corpus with the scalar kernel as a control:
+
+| filter names | walk | offset table | |
+|---|---|---|---|
+| the first key of sixteen | 206 µs | 317 µs | **1.54× slower** |
+| the last key of sixteen | 1385 µs | 296 µs | **4.7× faster** |
+
+The prediction that a seek beats a walk was right about the worst case and wrong to assume there
+was no cost. A binary search always pays `log2(n)` probes, so it loses to a walk that was going to
+find its answer on the first comparison. What the table really buys is that **lookup cost no
+longer depends on which field the filter names** — the cliff between the first key and the last
+one is gone, and the average across fields improves 1.75× at eight fields and 2.6× at sixteen.
+
 - **Secondary field indexes** would remove the lookup entirely rather than shortening it, which
   is the only thing that can make a filtered search *faster* than an unfiltered one.
-  `Filter::referenced_fields()` exists to feed that decision.
+  `Filter::referenced_fields()` exists to feed that decision. Still future work.
 
 One incidental observation worth keeping: the filtered timings are far more stable across runs
 than the unfiltered ones (5.98–6.00 ms against 3.30–5.24 ms on the same machine). The scan is
 memory-bandwidth-bound and therefore thermally sensitive; the lookup is branch- and
 compute-bound and is not.
 
-Until then: filter for correctness. Filtering will not currently make a search faster, though it
-no longer makes it slower.
+Filter for correctness. Filtering will not currently make a search faster, though it does not
+make it slower, and on wide metadata it no longer matters which field you name.
 
 `SearchStats` reports `considered` and `skipped`, which together give a filter's selectivity, and
 therefore how much work a scan is doing for the results it returns.

@@ -331,6 +331,7 @@ version = "0.0.1"
 dependencies = [
  "vdb-format",
  "vdb-storage-memory",
+ "vdb-storage-os",
  "vdb-testkit",
 ]
 

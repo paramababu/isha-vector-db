@@ -137,6 +137,72 @@ fn metadata_for(i: usize) -> Metadata {
     m
 }
 
+/// How many fields the wide-metadata corpus carries. Comfortably above
+/// `INDEX_MIN_ENTRIES`, and representative of a document with real attributes rather than the
+/// three the main corpus uses.
+/// Overridable at compile time (`VDB_BENCH_WIDE_FIELDS=12 cargo build`) so the crossover can be
+/// re-measured without editing this file. Parsed at runtime because `from_str_radix` is not
+/// const until Rust 1.82 and the MSRV is 1.78.
+fn wide_fields() -> usize {
+    option_env!("VDB_BENCH_WIDE_FIELDS")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(16)
+}
+
+/// Metadata wide enough to trigger the offset table, with the probe fields at the two extremes
+/// of key order so a linear walk and a binary search give visibly different answers.
+fn wide_metadata_for(i: usize) -> Metadata {
+    let mut m = Metadata::new();
+    // `aaa_first` sorts before everything, `zzz_last` after: the best and worst case for a walk.
+    m.insert("aaa_first", Value::I64((i % 10) as i64));
+    for f in 0..wide_fields().saturating_sub(2) {
+        m.insert(
+            format!("field_{f:02}"),
+            Value::Str(format!("value-{}-{}", f, i % 7)),
+        );
+    }
+    m.insert("zzz_last", Value::I64((i % 10) as i64));
+    m
+}
+
+/// The measurement that justifies the offset table, or does not.
+///
+/// Both probes match nothing, so each is a pure lookup over every row: no distances, no top-k
+/// churn. Under a linear walk `zzz_last` pays for every key in the record and `aaa_first` pays
+/// for none, so the gap between them *is* the walk cost. Under a binary search both are
+/// `log2(n)` probes and the gap should collapse. Comparing the gap — not the absolute times —
+/// is what makes this robust to the thermal drift that moves every number in a run.
+fn wide_metadata_probe(scale: Scale, vectors: &[Vec<f32>]) -> Result<Vec<Measurement>> {
+    let scratch = Scratch::new("wide");
+    let db = open(scratch.path(), Durability::Batch)?;
+    let c = db.create_collection(CollectionSpec::new("wide", scale.dimension, Metric::Cosine))?;
+    for chunk in (0..vectors.len()).collect::<Vec<_>>().chunks(1000) {
+        let mut batch = WriteBatch::with_capacity(chunk.len());
+        for &i in chunk {
+            let Some(v) = vectors.get(i) else { continue };
+            batch.upsert(
+                DocumentInput::new(format!("doc-{i:07}"), VectorView::f32(v))
+                    .with_metadata(wide_metadata_for(i)),
+            );
+        }
+        c.write_batch(batch)?;
+    }
+    c.flush()?;
+
+    let mut out = Vec::new();
+    for (label, field) in [
+        ("wide_first_key", "aaa_first"),
+        ("wide_last_key", "zzz_last"),
+    ] {
+        let filter = Filter::eq(field, Value::I64(-1));
+        let mut m = one_filtered_run(&c, vectors, scale, label, &filter)?;
+        m.note("fields_per_doc", wide_fields() as u64);
+        out.push(m);
+    }
+    db.close()?;
+    Ok(out)
+}
+
 /// Run everything and return the measurements.
 pub(crate) fn run_all(scale: Scale) -> Result<Vec<Measurement>> {
     let mut out = Vec::new();
@@ -154,6 +220,7 @@ pub(crate) fn run_all(scale: Scale) -> Result<Vec<Measurement>> {
     out.push(flush_to_disk(&collection, scratch.path())?);
     out.extend(search_latency(&collection, &vectors, scale)?);
     out.extend(filter_selectivity_sweep(&collection, &vectors, scale)?);
+    out.extend(wide_metadata_probe(scale, &vectors)?);
     out.push(get_by_id(&collection, scale)?);
     db.close()?;
 

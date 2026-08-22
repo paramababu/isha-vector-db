@@ -253,7 +253,7 @@ impl FileHeader {
             });
         }
 
-        if version < MIN_READABLE_VERSION || version > FORMAT_VERSION {
+        if !(MIN_READABLE_VERSION..=FORMAT_VERSION).contains(&version) {
             return Err(FormatError::UnsupportedVersion {
                 found: version,
                 min_readable: MIN_READABLE_VERSION,

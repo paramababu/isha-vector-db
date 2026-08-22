@@ -51,6 +51,33 @@ mod tag {
     pub(crate) const BYTES: u8 = 6;
     pub(crate) const ARRAY: u8 = 7;
     pub(crate) const MAP: u8 = 8;
+    /// A map carrying a fixed-width offset table, so a lookup can binary-search the keys
+    /// instead of walking every entry. Same logical content as [`MAP`].
+    pub(crate) const MAP_INDEXED: u8 = 9;
+}
+
+/// Field count at or above which a map is written with an offset table.
+///
+/// Below it the table costs more bytes than the linear scan costs time: a probe saves roughly
+/// one `skip_value` over a walked entry, so binary search only pays once `count / 2` comfortably
+/// exceeds `log2(count)`. Measured in `benches/metadata.rs`.
+///
+/// This is a constant rather than a decision about the data, which is what keeps the encoding a
+/// pure function of the value — the canonical-form rule still holds within a format version.
+pub(crate) const INDEX_MIN_ENTRIES: usize = 8;
+
+/// Bytes per entry in the offset table.
+const INDEX_ENTRY_BYTES: usize = 2;
+
+/// One entry of a map's offset table, or `None` if the table is too short to hold it.
+///
+/// Bounds-checked rather than indexed: the table comes off disk, and a truncated one must give
+/// an error rather than a panic.
+fn table_offset(table: &[u8], index: usize) -> Option<usize> {
+    let at = index.checked_mul(INDEX_ENTRY_BYTES)?;
+    let end = at.checked_add(INDEX_ENTRY_BYTES)?;
+    let bytes: [u8; INDEX_ENTRY_BYTES] = table.get(at..end)?.try_into().ok()?;
+    Some(usize::from(u16::from_le_bytes(bytes)))
 }
 
 /// A metadata value.
@@ -165,13 +192,39 @@ impl Value {
                     item.write_at_depth(w, depth + 1)?;
                 }
             }
-            Self::Map(entries) => {
+            // BTreeMap iterates in key order, which is what makes the encoding canonical.
+            Self::Map(entries) if entries.len() < INDEX_MIN_ENTRIES => {
                 w.u8(tag::MAP).varint(entries.len() as u64);
-                // BTreeMap iterates in key order, which is what makes the encoding canonical.
                 for (key, value) in entries {
                     w.string(key);
                     value.write_at_depth(w, depth + 1)?;
                 }
+            }
+            Self::Map(entries) => {
+                // Two passes, because the table has to precede the entries it points at. Only
+                // maps above the threshold pay the scratch allocation.
+                let mut scratch = Writer::new();
+                let mut offsets = Vec::with_capacity(entries.len());
+                for (key, value) in entries {
+                    offsets.push(scratch.len());
+                    scratch.string(key);
+                    value.write_at_depth(&mut scratch, depth + 1)?;
+                }
+                // Offsets are u16 to keep the table at two bytes a field. A map whose entries
+                // outgrow that is written plain: correctness must not depend on the size, and
+                // the reader handles both tags anyway.
+                let indexable = offsets
+                    .last()
+                    .is_some_and(|last| *last <= u16::MAX as usize);
+                if indexable {
+                    w.u8(tag::MAP_INDEXED).varint(entries.len() as u64);
+                    for off in &offsets {
+                        w.u16(*off as u16);
+                    }
+                } else {
+                    w.u8(tag::MAP).varint(entries.len() as u64);
+                }
+                w.raw(scratch.as_slice());
             }
         }
         Ok(())
@@ -231,16 +284,45 @@ impl Value {
                 }
                 Self::Array(items)
             }
-            tag::MAP => {
+            tag::MAP | tag::MAP_INDEXED => {
+                let indexed = t == tag::MAP_INDEXED;
                 let count_at = r.offset();
                 let count = r.varint()?;
                 // A pair is at minimum a one-byte key length, zero key bytes and a one-byte
-                // value tag: two bytes.
-                let count = bounded_count(count, r.remaining() / 2, count_at)?;
+                // value tag: two bytes; an indexed map adds the table entry on top.
+                let per_entry = if indexed { 2 + INDEX_ENTRY_BYTES } else { 2 };
+                let count = bounded_count(count, r.remaining() / per_entry, count_at)?;
+                // The table is validated rather than trusted: a corrupt offset would make
+                // `find_path` disagree with a full decode, and one of the two would be silently
+                // wrong. Decoding is the slow path that checks; lookup is the fast path that
+                // relies on the check having happened.
+                let table_at = r.offset();
+                let table = r.bytes(if indexed {
+                    count * INDEX_ENTRY_BYTES
+                } else {
+                    0
+                })?;
+                let entries_base = r.offset();
                 let mut entries = BTreeMap::new();
                 let mut previous: Option<String> = None;
-                for _ in 0..count {
+                for index in 0..count {
                     let key_at = r.offset();
+                    if indexed {
+                        let claimed = table_offset(table, index).ok_or(FormatError::Malformed {
+                            offset: table_at,
+                            kind: MalformedKind::Inconsistent {
+                                field: "map offset table",
+                            },
+                        })?;
+                        if claimed as u64 != key_at - entries_base {
+                            return Err(FormatError::Malformed {
+                                offset: table_at,
+                                kind: MalformedKind::Inconsistent {
+                                    field: "map offset table",
+                                },
+                            });
+                        }
+                    }
                     let key = r.string()?.to_owned();
                     if let Some(prev) = &previous {
                         match key.as_str().cmp(prev.as_str()) {
@@ -317,7 +399,17 @@ fn skip_at_depth(r: &mut Reader<'_>, depth: usize) -> Result<()> {
                 skip_at_depth(r, depth + 1)?;
             }
         }
-        tag::MAP => {
+        tag::MAP | tag::MAP_INDEXED => {
+            if t == tag::MAP_INDEXED {
+                let count_at = r.offset();
+                let count = bounded_count(r.varint()?, r.remaining() / 4, count_at)?;
+                r.skip(count * INDEX_ENTRY_BYTES)?;
+                for _ in 0..count {
+                    r.blob()?;
+                    skip_at_depth(r, depth + 1)?;
+                }
+                return Ok(());
+            }
             let count_at = r.offset();
             let count = bounded_count(r.varint()?, r.remaining() / 2, count_at)?;
             for _ in 0..count {
@@ -358,16 +450,67 @@ pub fn find_path(bytes: &[u8], path: &str) -> Result<Option<Value>> {
             return Ok(None);
         };
         let at = r.offset();
-        if r.u8()? != tag::MAP {
+        let t = r.u8()?;
+        if t != tag::MAP && t != tag::MAP_INDEXED {
             // Not a map, so there is nothing to descend into.
             let _ = at;
             return Ok(None);
         }
+        let wanted = segment.as_bytes();
+
+        if t == tag::MAP_INDEXED {
+            let count_at = r.offset();
+            let count = bounded_count(r.varint()?, r.remaining() / 4, count_at)?;
+            let table = r.bytes(count * INDEX_ENTRY_BYTES)?;
+            let entries_base = r.offset();
+            let entries = r.peek(r.remaining())?;
+
+            // Binary search over the table. Each probe reads one key; a linear walk reads a key
+            // *and* skips its value, so the saving grows with the value sizes as well as the
+            // field count. The table was checked against the entries when the record was last
+            // decoded in full, so an offset here is trusted only as far as the bounds check.
+            let (mut lo, mut hi) = (0usize, count);
+            let mut hit = None;
+            while lo < hi {
+                let mid = lo + (hi - lo) / 2;
+                let off = table_offset(table, mid).ok_or(FormatError::Malformed {
+                    offset: entries_base,
+                    kind: MalformedKind::Inconsistent {
+                        field: "map offset table",
+                    },
+                })?;
+                let rest = entries.get(off..).ok_or(FormatError::Malformed {
+                    offset: entries_base,
+                    kind: MalformedKind::Inconsistent {
+                        field: "map offset table",
+                    },
+                })?;
+                let mut probe = Reader::with_base(rest, entries_base + off as u64);
+                match probe.blob()?.cmp(wanted) {
+                    core::cmp::Ordering::Less => lo = mid + 1,
+                    core::cmp::Ordering::Greater => hi = mid,
+                    core::cmp::Ordering::Equal => {
+                        hit = Some(off);
+                        break;
+                    }
+                }
+            }
+            let Some(off) = hit else {
+                return Ok(None);
+            };
+            // Advance the real reader past the key, leaving it on the value — the same state
+            // the linear path below ends in, so the descent loop is shared.
+            r.skip(off)?;
+            r.blob()?;
+            if segments.peek().is_none() {
+                return Value::read_from(&mut r).map(Some);
+            }
+            continue;
+        }
+
         let count_at = r.offset();
         let count = bounded_count(r.varint()?, r.remaining() / 2, count_at)?;
-
         let mut found = false;
-        let wanted = segment.as_bytes();
         for _ in 0..count {
             // Compared as bytes, not as `&str`. Reading a key as a string validates UTF-8, and
             // this loop runs once per candidate row of a filtered scan — the benchmarks put a
@@ -554,9 +697,107 @@ mod tests {
         ));
     }
 
+    /// The whole risk of the offset table: `find_path` binary-searches while `decode` walks, so
+    /// the two could disagree and only one of them would be wrong. Sweeping every size across the
+    /// threshold puts both encodings under the same assertions — including the sizes where the
+    /// midpoint lands on the first or last entry, where an off-by-one hides.
+    #[test]
+    fn indexed_lookup_agrees_with_a_full_decode_at_every_size() {
+        for count in 0..40usize {
+            let mut map = BTreeMap::new();
+            for i in 0..count {
+                // Keys of differing length, so an offset table that assumed a fixed stride fails.
+                map.insert(
+                    format!("{:0width$}", i, width = (i % 7) + 2),
+                    Value::I64(i as i64),
+                );
+            }
+            let value = Value::Map(map.clone());
+            let bytes = value.encode().unwrap();
+
+            let indexed = count >= INDEX_MIN_ENTRIES;
+            assert_eq!(
+                bytes[0],
+                if indexed { tag::MAP_INDEXED } else { tag::MAP },
+                "count {count} picked the wrong encoding"
+            );
+            assert_eq!(Value::decode(&bytes).unwrap(), value, "count {count}");
+
+            for key in map.keys() {
+                assert_eq!(
+                    find_path(&bytes, key).unwrap().as_ref(),
+                    map.get(key),
+                    "count {count}, key {key}"
+                );
+            }
+            // Absent keys, including ones ordering before the first and after the last.
+            for absent in ["", "!", "zzzz", "0", "999999999"] {
+                assert_eq!(
+                    find_path(&bytes, absent).unwrap(),
+                    map.get(absent).cloned(),
+                    "count {count}, absent {absent}"
+                );
+            }
+        }
+    }
+
+    /// The offset table is read from bytes that may be hostile or damaged. Every single-byte
+    /// mutation, and every truncation, must produce an error or an answer — never a panic and
+    /// never a hang. This is what the `value` fuzz target does continuously; doing it
+    /// exhaustively over a small input catches the same class of bug in ordinary CI.
+    #[test]
+    fn no_mutation_of_an_indexed_map_can_panic() {
+        let mut map = BTreeMap::new();
+        for i in 0..9 {
+            map.insert(format!("key{i:02}"), Value::Str(format!("v{i}")));
+        }
+        let good = Value::Map(map).encode().unwrap();
+        assert_eq!(good[0], tag::MAP_INDEXED);
+
+        for i in 0..good.len() {
+            for bit in 0..8 {
+                let mut bad = good.clone();
+                bad[i] ^= 1 << bit;
+                // Both entry points, because they parse the table independently.
+                let _ = Value::decode(&bad);
+                for path in ["key00", "key08", "absent", "key00.nested"] {
+                    let _ = find_path(&bad, path);
+                }
+            }
+            // Truncation, which is how a torn write actually looks.
+            let _ = Value::decode(&good[..i]);
+            let _ = find_path(&good[..i], "key08");
+        }
+    }
+
+    /// A table pointing somewhere plausible but wrong must be caught, not silently answered from.
+    #[test]
+    fn a_corrupt_offset_table_is_rejected_by_decode() {
+        let mut map = BTreeMap::new();
+        for i in 0..10 {
+            map.insert(format!("k{i}"), Value::I64(i));
+        }
+        let good = Value::Map(map).encode().unwrap();
+        assert_eq!(good[0], tag::MAP_INDEXED);
+
+        // Byte 2 is the low half of the first offset, which must be zero.
+        let mut bad = good.clone();
+        bad[2] = 4;
+        assert!(matches!(
+            Value::decode(&bad),
+            Err(FormatError::Malformed {
+                kind: MalformedKind::Inconsistent {
+                    field: "map offset table"
+                },
+                ..
+            })
+        ));
+    }
+
     #[test]
     fn an_unknown_tag_is_rejected_with_its_value() {
-        for bad in [9u8, 42, 255] {
+        // 9 is MAP_INDEXED as of format v2; 10 is the first tag still unassigned.
+        for bad in [10u8, 42, 255] {
             match Value::decode(&[bad]) {
                 Err(FormatError::Malformed {
                     kind: MalformedKind::UnknownValueTag(t),

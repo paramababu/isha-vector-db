@@ -35,16 +35,22 @@ use vdb_format::{
     WalFrame, WalOp, Writer,
 };
 
-fn testdata(name: &str) -> PathBuf {
+/// Fixtures live under `testdata/v{version}`. Older directories are never regenerated: they are
+/// the record of what previous releases actually wrote, and the only honest way to test that this
+/// build can still read them.
+fn testdata(version: u16, name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../testdata/v1")
+        .join(format!("../../testdata/v{version}"))
         .join(name)
 }
 
 /// Compare against the committed fixture, or write it when blessing.
 fn golden(name: &str, actual: &[u8]) {
-    let path = testdata(name);
+    let path = testdata(vdb_format::FORMAT_VERSION, name);
     if std::env::var("VDB_BLESS").is_ok() {
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir).expect("create fixture directory");
+        }
         std::fs::write(&path, actual).expect("write fixture");
         return;
     }
@@ -66,11 +72,12 @@ fn golden(name: &str, actual: &[u8]) {
         .position(|(a, b)| a != b)
         .unwrap_or(expected.len().min(actual.len()));
     panic!(
-        "format v1 changed in {name}\n  \
+        "format v{} changed in {name}\n  \
          expected {} bytes, produced {} bytes\n  \
          first difference at offset {first_diff}: expected {:02x?}, produced {:02x?}\n  \
          If this change is deliberate: bump FORMAT_VERSION, add a migration, re-bless with \
          VDB_BLESS=1, and write FORMAT-CHANGE: in the PR body.",
+        vdb_format::FORMAT_VERSION,
         expected.len(),
         actual.len(),
         expected.get(first_diff),
@@ -156,6 +163,26 @@ fn fixture_value() -> Value {
     Value::Map(root)
 }
 
+/// Nine fields: above `INDEX_MIN_ENTRIES`, so this is written with an offset table while
+/// `fixture_value`'s six-field root is not. Both encodings therefore have committed bytes.
+fn fixture_wide_value() -> Value {
+    let mut root = BTreeMap::new();
+    for (i, key) in [
+        "author", "brand", "colour", "depth", "edition", "format", "gtin", "height", "weight",
+    ]
+    .iter()
+    .enumerate()
+    {
+        root.insert((*key).to_owned(), Value::I64(i as i64));
+    }
+    // A nested map that stays below the threshold, proving the choice is made per map and not
+    // once for the whole document.
+    let mut small = BTreeMap::new();
+    small.insert("iso".to_owned(), Value::Str("GB".into()));
+    root.insert("origin".to_owned(), Value::Map(small));
+    Value::Map(root)
+}
+
 fn fixture_wal() -> Vec<WalFrame> {
     vec![
         WalFrame::standalone(
@@ -211,6 +238,11 @@ fn manifest_bytes_are_stable() {
 #[test]
 fn value_bytes_are_stable() {
     golden("value.bin", &fixture_value().encode().unwrap());
+}
+
+#[test]
+fn wide_value_bytes_are_stable() {
+    golden("value-wide.bin", &fixture_wide_value().encode().unwrap());
 }
 
 #[test]
@@ -287,13 +319,28 @@ fn tombstone_bytes_are_stable() {
 // happens when a new build opens a database written by an old one.
 // ---------------------------------------------------------------------------
 
-fn read(name: &str) -> Vec<u8> {
-    std::fs::read(testdata(name))
-        .unwrap_or_else(|e| panic!("missing fixture {name}: {e}; run with VDB_BLESS=1"))
+fn read_at(version: u16, name: &str) -> Vec<u8> {
+    std::fs::read(testdata(version, name))
+        .unwrap_or_else(|e| panic!("missing v{version} fixture {name}: {e}; run with VDB_BLESS=1"))
+}
+
+/// Every format version this build claims to read gets its own case, so dropping support for one
+/// is a visible deletion rather than a silent gap.
+#[test]
+fn this_build_can_read_every_v1_fixture() {
+    assert_fixtures_readable(1);
 }
 
 #[test]
-fn this_build_can_read_every_v1_fixture() {
+fn this_build_can_read_every_v2_fixture() {
+    assert_fixtures_readable(2);
+}
+
+/// The same assertions against whichever version's bytes: decoding must produce the identical
+/// logical content regardless of how it was encoded. That is what backward compatibility *means*
+/// here, and it is why these compare values rather than bytes.
+fn assert_fixtures_readable(version: u16) {
+    let read = |name: &str| read_at(version, name);
     assert_eq!(
         Catalog::decode(&read("catalog.bin")).unwrap(),
         fixture_catalog()
@@ -303,6 +350,29 @@ fn this_build_can_read_every_v1_fixture() {
         fixture_manifest()
     );
     assert_eq!(Value::decode(&read("value.bin")).unwrap(), fixture_value());
+    // Added in v2 along with the indexed map encoding; v1 has no such file.
+    if version >= 2 {
+        assert_eq!(
+            Value::decode(&read("value-wide.bin")).unwrap(),
+            fixture_wide_value()
+        );
+        // The point of the table: every field reachable by path, including the last.
+        for (i, key) in ["author", "gtin", "weight"].iter().enumerate() {
+            let _ = i;
+            assert!(
+                vdb_format::find_path(&read("value-wide.bin"), key)
+                    .unwrap()
+                    .is_some(),
+                "{key} must be reachable through the offset table"
+            );
+        }
+        assert!(vdb_format::find_path(&read("value-wide.bin"), "origin.iso")
+            .unwrap()
+            .is_some());
+        assert!(vdb_format::find_path(&read("value-wide.bin"), "absent")
+            .unwrap()
+            .is_none());
+    }
 
     let wal = vdb_format::wal::scan(&read("wal.bin"));
     assert_eq!(wal.tail, vdb_format::WalTail::Clean);
@@ -349,10 +419,17 @@ fn this_build_can_read_every_v1_fixture() {
     assert!(!del.is_live(129));
 }
 
-/// Every fixture must declare format version 1. If a structure silently started writing a
-/// different version, the round-trip tests would still pass while old builds broke.
+/// A fixture must declare the version of the directory it sits in. If a structure silently
+/// started writing a different version, the round-trip tests would still pass while old builds
+/// broke — the bytes would be self-consistent and simply unreadable elsewhere.
 #[test]
-fn every_fixture_declares_format_version_one() {
+fn every_fixture_declares_the_version_of_its_directory() {
+    for version in 1..=vdb_format::FORMAT_VERSION {
+        assert_headers_declare(version);
+    }
+}
+
+fn assert_headers_declare(version: u16) {
     for name in [
         "catalog.bin",
         "manifest.bin",
@@ -361,14 +438,14 @@ fn every_fixture_declares_format_version_one() {
         "segment.meta",
         "segment.del",
     ] {
-        let bytes = read(name);
-        let header =
-            vdb_format::FileHeader::decode_any(&bytes).unwrap_or_else(|e| panic!("{name}: {e}"));
-        assert_eq!(header.version, 1, "{name}");
+        let bytes = read_at(version, name);
+        let header = vdb_format::FileHeader::decode_any(&bytes)
+            .unwrap_or_else(|e| panic!("v{version} {name}: {e}"));
+        assert_eq!(header.version, version, "{name}");
         assert_eq!(
             header.flags.bits(),
             0,
-            "{name} must not be compressed or encrypted in v1"
+            "v{version} {name} must not be compressed or encrypted"
         );
     }
 }

@@ -19,6 +19,9 @@ vdb-format.workspace = true
 # guard.
 vdb-testkit.workspace = true
 vdb-storage-memory.workspace = true
+# Only for tests/compat.rs, which must open a real on-disk database written by an older release.
+# A dev-dependency, so the purity rule that keeps this crate free of platform code still holds.
+vdb-storage-os.workspace = true
 
 [lints]
 workspace = true

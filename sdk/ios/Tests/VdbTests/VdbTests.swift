@@ -29,8 +29,13 @@ final class VdbTests: XCTestCase {
 
     func testVersionsAreReported() {
         XCTAssertFalse(Version.library.isEmpty)
+        // The ABI is frozen, so this is an exact assertion: any change to it breaks every
+        // compiled caller and must be a deliberate, visible edit here.
         XCTAssertEqual(Version.abi, 1)
-        XCTAssertEqual(Version.format, 1)
+        // The on-disk format moves independently and breaks nothing that was rebuilt, so this
+        // asserts the invariant rather than the number — otherwise every format bump edits an
+        // SDK that had no reason to change.
+        XCTAssertGreaterThanOrEqual(Version.format, 1)
     }
 
     func testWriteSearchAndRead() throws {

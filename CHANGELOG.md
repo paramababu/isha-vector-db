@@ -9,6 +9,29 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
 
 ## [Unreleased]
 
+### Changed
+
+- **Storage format: version 2.** Metadata maps of eight fields or more now carry a table of
+  `u16` offsets that field lookup binary-searches instead of walking
+  ([ADR-0014](docs/adr/0014-metadata-offset-table.md)). Records below eight fields are
+  byte-identical to v1.
+
+  Measured on a sixteen-field corpus with the scalar kernel as a control: a filter naming the
+  last key of a record is **4.7× faster**, one naming the first key is **1.54× slower**, and the
+  average across fields improves **2.6×**. The regression on the best case is real — a binary
+  search always pays `log2(n)` probes where a walk could get lucky on the first comparison. What
+  the table buys is that lookup cost no longer depends on *which* field a filter names.
+
+  `MIN_READABLE_VERSION` stays 1, so this release reads v1 databases. Two tests hold that:
+  `this_build_can_read_every_v1_fixture` reads the untouched `testdata/v1/` structures, and
+  `a_database_written_by_v1_still_opens` opens a complete database in `testdata/db-v1/` that was
+  written by the v1 encoder — through recovery, verification and filtered search. A v1 build
+  cannot read v2 files and says so, because every file header carries its own version.
+
+  **The ABI did not change.** `vdb_abi_version()` is still 1 while `vdb_format_version()` returns
+  2; no signature moved and no SDK needed an edit. This is the first exercise of that separation,
+  and of the format-migration machinery generally.
+
 ### Added
 
 - Architecture documentation: eleven design documents plus decision records
@@ -142,6 +165,6 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
 
 ### Notes
 
-- Storage format version 1 is defined but **not frozen**: it may still change without migration
+- The storage format is defined but **not frozen**: it may still change without migration
   support until 0.1.
 - The public API is not stable and will change without notice before 0.1.

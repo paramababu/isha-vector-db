@@ -81,7 +81,7 @@ compile_error!(
 );
 
 /// The format version this build writes.
-pub const FORMAT_VERSION: u16 = 1;
+pub const FORMAT_VERSION: u16 = 2;
 
 /// The oldest format version this build can read.
 ///

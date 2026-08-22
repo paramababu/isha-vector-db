@@ -92,8 +92,20 @@ fn vdb(args: &[&str]) -> (i32, String) {
 fn version_reports_the_on_disk_format() {
     let (code, out) = vdb(&["version"]);
     assert_eq!(code, 0);
-    assert!(out.contains("on-disk format: v1"), "{out}");
-    assert!(out.contains("reads formats"), "{out}");
+    // Derived, not hardcoded: a version bump should not need this test edited, but it must
+    // still fail if the CLI stops reporting the range at all.
+    assert!(
+        out.contains(&format!("on-disk format: v{}", vdb_format::FORMAT_VERSION)),
+        "{out}"
+    );
+    assert!(
+        out.contains(&format!(
+            "reads formats: v{}..=v{}",
+            vdb_format::MIN_READABLE_VERSION,
+            vdb_format::FORMAT_VERSION
+        )),
+        "{out}"
+    );
 }
 
 #[test]

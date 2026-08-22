@@ -53,7 +53,7 @@ Nothing at or below the public API knows which platform it is on. That is enforc
 | Architecture, ADRs | Done |
 | `vdb-core` error model, paths, utilities, storage traits | Done |
 | `vdb-storage-memory` + storage conformance suite | Done |
-| `vdb-format` — on-disk format v1, golden fixtures, fuzz targets | Done |
+| `vdb-format` — on-disk format v2 (v1 still readable), golden fixtures, fuzz targets | Done |
 | Data model: vectors, metadata, documents, ids, limits | Done |
 | Write path: memtable, WAL, replay, crash-sweep suite | Done |
 | Segment flush, manifest commit, full reopen | Done |

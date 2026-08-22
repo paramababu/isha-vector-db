@@ -10,7 +10,7 @@
 | **2** | 0.3 | React Native, Flutter, Android, iOS SDKs; parity tests; per-platform examples and docs | Every SDK passes the shared parity suite on a real device |
 | **3** | 0.4 | HNSW; index selection guidance; recall gates; on-disk id table for large collections | Recall@10 ≥ 0.95 at documented params; build time benchmarked |
 | **4** | 0.5 | Web/WASM SDK (OPFS + IndexedDB fallback); encryption codec; scalar quantization | Web e2e in 3 browsers; encryption round-trip + key-rotation tests |
-| **5** | 1.0 | API freeze; stability commitment; format v1 frozen with a migration path proven by an actual v1→v2 dry run | Three consecutive releases with no breaking changes; production users |
+| **5** | 1.0 | API freeze; stability commitment; format frozen with a migration path proven by an actual v1→v2 migration — **done**, see [ADR-0014](../adr/0014-metadata-offset-table.md) | Three consecutive releases with no breaking changes; production users |
 | **Later** | 1.x | IVF/PQ, hybrid BM25 + fusion, secondary metadata indexes, interactive transactions, multi-vector documents, sparse vectors, Python/Go/C# bindings | — |
 
 ## 11.2 Major technical risks and mitigations
