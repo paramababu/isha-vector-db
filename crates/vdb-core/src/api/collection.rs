@@ -5,14 +5,26 @@ use std::sync::{Arc, RwLock, RwLockReadGuard};
 use vdb_format::{Catalog, CollectionEntry, SegmentRef, WalOp};
 
 use crate::api::database::DbInner;
-use crate::api::{BatchOp, BatchReport, CollectionStats, WriteBatch};
+use crate::api::{
+    BatchOp, BatchReport, CollectionStats, Hit, SearchRequest, SearchResponse, SearchStats,
+    WriteBatch,
+};
 use crate::document::{DocId, Document, DocumentInput, Include};
 use crate::error::{ConflictError, NotFoundError, Result, TransactionError};
+use crate::index::{Budget, LiveSet, SearchCtx, VectorIndex, VectorSource};
 use crate::metadata::Metadata;
 use crate::persistence::segment::{flush_memtable, list_segment_ids, remove_segment, SegmentData};
 use crate::persistence::{layout, replay_into, wal::WalWriter};
+use crate::search::{distance_from_score, TopK};
 use crate::vector::{VectorDType, VectorView};
 use crate::write::{memtable::Lookup, Memtable};
+use vdb_format::segment::VectorBlock;
+
+/// Segment index used for rows that live in the memtable rather than on disk.
+///
+/// `u32::MAX` rather than a separate enum so a [`RowId`](crate::document::RowId) stays a single
+/// packed integer everywhere, including inside an index that knows nothing about memtables.
+const MEMTABLE_SEGMENT: u32 = u32::MAX;
 
 /// Where a document currently lives.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -445,6 +457,100 @@ impl Collection {
         Ok(out)
     }
 
+    // ---- search -----------------------------------------------------------
+
+    /// Find the nearest documents to a query vector.
+    ///
+    /// Results are ordered by score descending, ties broken by ascending id. Scores are always
+    /// higher-is-better; see [`crate::search::metric`] for what each metric returns.
+    ///
+    /// # Errors
+    /// [`crate::error::ValidationError`] for a bad `top_k` or a dimension mismatch,
+    /// [`crate::DbError::Cancelled`] if the budget was exhausted, or any storage error.
+    pub fn search(&self, request: &SearchRequest<'_>) -> Result<SearchResponse> {
+        self.search_with_budget(request, &Budget::unlimited())
+    }
+
+    /// Search, with a budget that can cancel it from another thread or cap the work it does.
+    ///
+    /// The core spawns no threads, so this is how a caller interrupts a long search: an SDK
+    /// hands the same [`Budget`] to whatever owns the user's intent, and cancels it when the
+    /// user navigates away.
+    ///
+    /// # Errors
+    /// As [`Collection::search`].
+    pub fn search_with_budget(
+        &self,
+        request: &SearchRequest<'_>,
+        budget: &Budget,
+    ) -> Result<SearchResponse> {
+        self.db.check_open()?;
+        crate::validation::check_top_k(request.top_k)?;
+        request
+            .vector
+            .check_dimension(self.name(), self.dimension())?;
+        // A query with a NaN component would make every comparison against it false and quietly
+        // return nonsense, so it is refused for the same reason a stored one is.
+        request.vector.check_finite()?;
+
+        let metric = request.metric.unwrap_or(self.inner.catalog.metric);
+        let query = request.vector.to_f32();
+        let state = self.read_state()?;
+
+        let source = CollectionSource::build(&state, self.dimension())?;
+        let ctx = SearchCtx {
+            query: &query,
+            top_k: request.top_k,
+            metric,
+            source: &source,
+            live: &source,
+            filter: None,
+            min_score: request.min_score,
+            params: request.params,
+            budget,
+        };
+
+        // v1 has one index kind. Selecting between several arrives with the registry in
+        // phase 3, when there is a second implementation to select.
+        let index = crate::index::ExactScan::new();
+        let mut top = TopK::new(request.top_k).with_min_score(request.min_score);
+        index.search(&ctx, &mut top)?;
+
+        let considered = top.considered();
+        let mut hits = Vec::with_capacity(top.len());
+        for candidate in top.into_sorted() {
+            let Some(id) = source.doc_id(candidate.row) else {
+                continue;
+            };
+            let document = if request.include == crate::document::Include::NONE {
+                None
+            } else {
+                source.document(candidate.row, request.include)?
+            };
+            hits.push(Hit {
+                id,
+                score: candidate.score,
+                distance: distance_from_score(metric, candidate.score),
+                document,
+            });
+        }
+
+        // The user-visible ordering contract: score descending, then id ascending. The index
+        // already broke ties by row, which is deterministic but unrelated to id order.
+        hits.sort_by(|a, b| b.score.total_cmp(&a.score).then_with(|| a.id.cmp(&b.id)));
+
+        Ok(SearchResponse {
+            hits,
+            stats: SearchStats {
+                index_kind: index.kind(),
+                exact: index.is_exact(),
+                considered,
+                scanned: budget.scanned(),
+                skipped: source.len() as u64 - considered.min(source.len() as u64),
+            },
+        })
+    }
+
     // ---- maintenance ------------------------------------------------------
 
     /// Fold buffered writes into a new segment and commit.
@@ -702,4 +808,165 @@ fn segment_has_live(state: &CollState, id: &DocId) -> bool {
         .segments
         .iter()
         .any(|s| s.row_of(id).is_some_and(|row| s.is_live(row)))
+}
+
+/// Presents a collection's segments and memtable as one scannable sequence.
+///
+/// Rows are yielded segment by segment and then from the memtable, skipping anything dead or
+/// superseded. Doing the shadowing here rather than in the index means every index — flat today,
+/// HNSW later — sees a clean view and none of them has to know that a memtable exists.
+struct CollectionSource<'a> {
+    state: &'a CollState,
+    dimension: u32,
+    /// One opened vector block per segment, in segment order.
+    blocks: Vec<VectorBlock<'a>>,
+    /// Live memtable rows, in flush order.
+    memtable_rows: Vec<&'a crate::write::MemRow>,
+    len: usize,
+}
+
+impl<'a> CollectionSource<'a> {
+    fn build(state: &'a CollState, dimension: u32) -> Result<Self> {
+        let mut blocks = Vec::with_capacity(state.segments.len());
+        for seg in &state.segments {
+            blocks.push(seg.vectors()?);
+        }
+        let memtable_rows = state.memtable.live_rows();
+
+        let mut len = memtable_rows.len();
+        for seg in &state.segments {
+            for row in 0..seg.rows() {
+                if seg.is_live(row) && !Self::shadowed(state, seg.id_at(row)) {
+                    len += 1;
+                }
+            }
+        }
+        Ok(Self {
+            state,
+            dimension,
+            blocks,
+            memtable_rows,
+            len,
+        })
+    }
+
+    /// Whether the memtable holds a newer version of this document, or a tombstone for it.
+    fn shadowed(state: &CollState, id: Option<&DocId>) -> bool {
+        match id {
+            Some(id) => state.memtable.get(id).is_some(),
+            None => false,
+        }
+    }
+
+    fn doc_id(&self, row: crate::document::RowId) -> Option<DocId> {
+        if row.segment() == MEMTABLE_SEGMENT {
+            return self
+                .memtable_rows
+                .get(row.row() as usize)
+                .map(|r| r.id.clone());
+        }
+        self.state
+            .segments
+            .get(row.segment() as usize)
+            .and_then(|s| s.id_at(row.row()))
+            .cloned()
+    }
+
+    fn document(
+        &self,
+        row: crate::document::RowId,
+        include: crate::document::Include,
+    ) -> Result<Option<Document>> {
+        if row.segment() == MEMTABLE_SEGMENT {
+            let Some(mem) = self.memtable_rows.get(row.row() as usize) else {
+                return Ok(None);
+            };
+            let vector = if include.vector {
+                let bytes = self.state.memtable.vector_bytes(mem).ok_or_else(|| {
+                    crate::internal_error!("memtable row {:?} lost its vector", mem.id)
+                })?;
+                Some(VectorView::raw(VectorDType::F32, bytes, self.dimension)?.to_f32())
+            } else {
+                None
+            };
+            return Ok(Some(Document {
+                id: mem.id.clone(),
+                vector,
+                metadata: if include.metadata {
+                    mem.metadata.clone().unwrap_or_default()
+                } else {
+                    Metadata::new()
+                },
+                content: if include.content {
+                    mem.content.clone()
+                } else {
+                    None
+                },
+            }));
+        }
+        match self.state.segments.get(row.segment() as usize) {
+            Some(seg) => seg.document(row.row(), include),
+            None => Ok(None),
+        }
+    }
+}
+
+impl VectorSource for CollectionSource<'_> {
+    fn dimension(&self) -> u32 {
+        self.dimension
+    }
+
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    fn for_each(&self, visit: &mut crate::index::RowVisitor<'_>) -> Result<()> {
+        for (index, seg) in self.state.segments.iter().enumerate() {
+            let Some(block) = self.blocks.get(index) else {
+                continue;
+            };
+            for row in 0..seg.rows() {
+                if !seg.is_live(row) || Self::shadowed(self.state, seg.id_at(row)) {
+                    continue;
+                }
+                let (Some(bytes), Some(norm)) = (block.row(row), seg.inv_norm(row)) else {
+                    continue;
+                };
+                visit(crate::document::RowId::new(index as u32, row), bytes, norm)?;
+            }
+        }
+        for (index, mem) in self.memtable_rows.iter().enumerate() {
+            let Some(bytes) = self.state.memtable.vector_bytes(mem) else {
+                continue;
+            };
+            visit(
+                crate::document::RowId::new(MEMTABLE_SEGMENT, index as u32),
+                bytes,
+                mem.inv_norm,
+            )?;
+        }
+        Ok(())
+    }
+
+    fn vector(&self, row: crate::document::RowId) -> Option<(&[u8], f32)> {
+        if row.segment() == MEMTABLE_SEGMENT {
+            let mem = self.memtable_rows.get(row.row() as usize)?;
+            return Some((self.state.memtable.vector_bytes(mem)?, mem.inv_norm));
+        }
+        let seg = self.state.segments.get(row.segment() as usize)?;
+        let block = self.blocks.get(row.segment() as usize)?;
+        Some((block.row(row.row())?, seg.inv_norm(row.row())?))
+    }
+}
+
+impl LiveSet for CollectionSource<'_> {
+    fn is_live(&self, row: crate::document::RowId) -> bool {
+        if row.segment() == MEMTABLE_SEGMENT {
+            return (row.row() as usize) < self.memtable_rows.len();
+        }
+        match self.state.segments.get(row.segment() as usize) {
+            Some(seg) => seg.is_live(row.row()),
+            None => false,
+        }
+    }
 }

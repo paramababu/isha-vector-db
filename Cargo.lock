@@ -16,6 +16,14 @@ name = "vdb-format"
 version = "0.0.1"
 
 [[package]]
+name = "vdb-index-flat"
+version = "0.0.1"
+dependencies = [
+ "vdb-core",
+ "vdb-testkit",
+]
+
+[[package]]
 name = "vdb-storage-memory"
 version = "0.0.1"
 dependencies = [

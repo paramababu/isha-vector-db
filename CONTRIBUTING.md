@@ -47,10 +47,16 @@ after users have data on disk.
 11. **Avoid dependencies.** Adding one to `vdb-core` or `vdb-format` needs an ADR and will be
     rejected by CI until that ADR exists.
 12. **Prefer small, well-defined interfaces.**
-13. **Keep the core deterministic.** Seeded RNG, injected clock, stable tie-breaking.
-14. **Document architectural decisions.** If a review argument about *why* takes more than one
+13. **A `#[non_exhaustive]` type that callers construct needs a constructor or builders.**
+    `#[non_exhaustive]` keeps adding a field from being a breaking change, but it also stops any
+    code outside this crate from writing a struct literal. If an SDK, a third-party storage
+    backend or a third-party index has to *build* the type, the constructor is part of the API,
+    not sugar on top of it. This has caught us three times already — `StorageCapabilities`,
+    `DatabaseConfig`, `IndexStats`.
+14. **Keep the core deterministic.** Seeded RNG, injected clock, stable tie-breaking.
+15. **Document architectural decisions.** If a review argument about *why* takes more than one
     round trip, write an ADR (`docs/adr/0000-template.md`).
-15. **Benchmark before making performance claims.**
+16. **Benchmark before making performance claims.**
 
 ## Writing tests
 

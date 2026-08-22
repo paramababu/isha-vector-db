@@ -58,7 +58,8 @@ Nothing at or below the public API knows which platform it is on. That is enforc
 | Write path: memtable, WAL, replay, crash-sweep suite | Done |
 | Segment flush, manifest commit, full reopen | Done |
 | `Database`/`Collection` public API, CRUD, batches | Done |
-| `vdb-index-flat`, metrics, top-K search | Next |
+| Search: metrics, top-K, exact scan | Done |
+| Metadata filters | Next |
 | `vdb-index-flat`, search, filters | Not started |
 | `vdb-storage-os` | Not started |
 | C ABI, SDKs, HNSW, web | Later phases |
@@ -81,11 +82,19 @@ let db = Database::open(
 
 let docs = db.create_collection(CollectionSpec::new("docs", 4, Metric::Cosine))?;
 docs.insert(DocumentInput::new("a", VectorView::f32(&[1.0, 0.0, 0.0, 0.0])))?;
-assert_eq!(docs.count()?, 1);
+docs.insert(DocumentInput::new("b", VectorView::f32(&[0.0, 1.0, 0.0, 0.0])))?;
+
+let results = docs.search(&SearchRequest::new(
+    VectorView::f32(&[0.9, 0.1, 0.0, 0.0]),
+    10,
+))?;
+assert_eq!(results.hits[0].id, DocId::from("a"));
+
 db.close()?;
 ```
 
-Search is not implemented yet — that is the next step.
+Scores are always higher-is-better, whatever the metric; ties break on ascending id. Metadata
+filtering is the next step.
 
 ## Building
 

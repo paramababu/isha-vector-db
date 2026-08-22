@@ -28,9 +28,11 @@ pub mod api;
 pub mod clock;
 pub mod document;
 pub mod error;
+pub mod index;
 pub mod metadata;
 pub mod path;
 pub mod persistence;
+pub mod search;
 pub mod storage;
 pub mod util;
 pub mod validation;
@@ -39,7 +41,8 @@ pub mod write;
 
 pub use api::{
     BatchReport, Collection, CollectionInfo, CollectionSpec, CollectionStats, Database,
-    DatabaseConfig, DatabaseStats, Snapshot, UpsertOutcome, WriteBatch,
+    DatabaseConfig, DatabaseStats, Hit, SearchRequest, SearchResponse, SearchStats, Snapshot,
+    UpsertOutcome, WriteBatch,
 };
 pub use clock::{Clock, ManualClock};
 pub use document::{DocId, Document, DocumentInput, IdKind, Include, RowId};

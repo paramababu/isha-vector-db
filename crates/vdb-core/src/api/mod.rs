@@ -8,10 +8,12 @@ mod batch;
 mod collection;
 mod config;
 mod database;
+mod search;
 mod stats;
 
 pub use batch::{BatchOp, BatchReport, WriteBatch};
 pub use collection::{Collection, Snapshot, UpsertOutcome};
 pub use config::{CollectionSpec, DatabaseConfig};
 pub use database::{CollectionInfo, Database};
+pub use search::{Hit, SearchRequest, SearchResponse, SearchStats};
 pub use stats::{CollectionStats, DatabaseStats};

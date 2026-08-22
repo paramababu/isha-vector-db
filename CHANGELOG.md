@@ -51,6 +51,15 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
   stats), plus `DatabaseConfig`/`CollectionSpec` builders, `WriteBatch`, and an injected
   `Clock`. Reads and writes go through the log before becoming visible, and the memtable
   auto-flushes at a configurable threshold.
+- **Search**: `Collection::search` with cosine, L2 and inner product; bounded top-K selection;
+  the scoring contract (`score` always higher-is-better, `distance` where the metric defines
+  one, ties broken by ascending id); per-query metric override, score thresholds and
+  `Include` control; and a cooperative `Budget` for cancellation and scan ceilings. Unflushed
+  writes are searchable, and a buffered overwrite shadows its flushed copy.
+- `vdb_core::index`: the `VectorIndex` trait, `VectorSource`, `LiveSet`, `RowPredicate`,
+  `Budget`, and `ExactScan` — the always-available reference implementation.
+- `vdb-index-flat`: the home of the future SIMD kernels, delegating to the reference today, with
+  the differential and exactness suite that will validate them.
 - CI: `ci-format` refuses a golden-fixture change without a declared `FORMAT-CHANGE:` and a
   `FORMAT_VERSION` bump; `nightly` runs each fuzz target for an hour and reports coverage.
 

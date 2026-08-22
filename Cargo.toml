@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/vdb-core",
     "crates/vdb-format",
+    "crates/vdb-index-flat",
     "crates/vdb-storage-memory",
     "crates/vdb-testkit",
 ]
