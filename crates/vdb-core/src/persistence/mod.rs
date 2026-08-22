@@ -1,5 +1,6 @@
 //! Durability: the log, recovery, and the policy that decides when bytes must be safe.
 
+pub mod index_snapshot;
 pub mod layout;
 pub mod manifest;
 pub mod recovery;

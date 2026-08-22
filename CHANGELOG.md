@@ -43,10 +43,17 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
   recall 1.000** on 5,000 × 128, and **12.8× faster at recall 0.974** on 50,000 × 384. Recall
   against the beam width at 10,000 × 128: 0.905 at ef 16, 0.960 at 32, 0.992 at 64, 1.000 at 128.
 
-  Two limitations, both stated rather than buried. **Building takes 95 seconds for 50,000 × 384**,
-  and **the graph is not persisted** — it is rebuilt whenever the row count, dimension or metric
-  changes, including on reopen. Persisting it needs the `index_snapshot` slot the manifest already
-  reserves and a format bump, and is the next piece of work.
+  Building takes about eighty seconds for 50,000 × 384. That was a serious limitation while the
+  graph lived only in memory; **it is now persisted**, so reopening a database restores the graph
+  in **40.9 ms instead of rebuilding it in 80.1 s — 1,958× faster**
+  ([ADR-0016](docs/adr/0016-index-snapshots.md)). A write still invalidates the whole graph and
+  forces a rebuild; incremental insertion is the next improvement.
+
+  `VectorIndex::prepare` takes an `IndexSnapshots` — `load` and `store` — implemented by the
+  engine over storage. **A snapshot is a cache, not data**, which is what let this ship without an
+  on-disk format bump, without a migration, and without crash protection: anything stale,
+  truncated, corrupt or unrecognised is discarded and the index rebuilds. Every single-byte flip
+  across a snapshot is tested to produce a rebuild and identical answers.
 
   `VectorIndex` gained one defaulted method, `prepare(source, metric)`, so an index has somewhere
   to build that is not inside a `&self` search. Existing implementations are unaffected.

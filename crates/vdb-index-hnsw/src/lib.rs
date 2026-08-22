@@ -35,13 +35,16 @@ mod graph;
 mod params;
 mod score;
 mod search;
+mod snapshot;
 
 pub use params::HnswParams;
 
 use std::sync::RwLock;
 
 use vdb_core::error::Result;
-use vdb_core::index::{IndexKind, IndexStats, SearchCtx, VectorIndex, VectorSource};
+use vdb_core::index::{
+    IndexKind, IndexSnapshots, IndexStats, SearchCtx, VectorIndex, VectorSource,
+};
 use vdb_core::search::{Metric, TopK};
 
 use graph::Graph;
@@ -114,7 +117,12 @@ impl VectorIndex for HnswIndex {
         false
     }
 
-    fn prepare(&self, source: &dyn VectorSource, metric: Metric) -> Result<()> {
+    fn prepare(
+        &self,
+        source: &dyn VectorSource,
+        metric: Metric,
+        snapshots: &dyn IndexSnapshots,
+    ) -> Result<()> {
         let dimension = source.dimension() as usize;
         let rows = source.len();
 
@@ -127,13 +135,44 @@ impl VectorIndex for HnswIndex {
             }
         }
 
-        let built = build::build(source, metric, &self.params)?;
+        // Read the rows once. Both paths need them: restoring has to confirm the snapshot still
+        // describes this data, and building needs them anyway.
+        let decoded = build::decode_rows(source)?;
+
+        let restored = match snapshots.load()? {
+            Some(bytes) => snapshot::decode_header(&bytes, &self.params)
+                .filter(|h| {
+                    h.metric == metric
+                        && h.dimension == dimension
+                        && h.nodes == rows
+                        && h.params_match
+                })
+                .and_then(|header| snapshot::decode(&bytes, &header, &decoded)),
+            None => None,
+        };
+
+        let (graph, is_new) = match restored {
+            Some(g) => (g, false),
+            None => (
+                build::build_from(decoded, dimension, metric, &self.params),
+                true,
+            ),
+        };
+
+        // Written before the lock is taken, so a slow write does not block concurrent searches
+        // on a graph that is already correct in memory.
+        if is_new {
+            // A snapshot that cannot be written is not a reason to fail a search: the index is
+            // built and usable, and the only cost is rebuilding it next time.
+            let _ = snapshots.store(&snapshot::encode(&graph, &self.params));
+        }
+
         let mut guard = self.graph.write().unwrap_or_else(|e| e.into_inner());
         // Another thread may have built it while this one was working. Both graphs are identical
         // — construction is deterministic — so either is correct; this simply avoids discarding
         // the newer one.
         if !guard.is_valid_for(rows, dimension, metric) {
-            *guard = built;
+            *guard = graph;
         }
         Ok(())
     }

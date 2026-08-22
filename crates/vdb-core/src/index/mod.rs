@@ -279,6 +279,53 @@ impl IndexStats {
     }
 }
 
+/// Where an index keeps whatever it built, so it does not have to build it again.
+///
+/// # A snapshot is a cache, not data
+///
+/// This is the property that makes the whole mechanism simple. Nothing a snapshot holds is
+/// authoritative: every byte of it can be recomputed from the segments, which are the real data.
+/// So a snapshot that is stale, truncated, corrupt, written by a different build, or in a format
+/// this build has never seen is not an error and not a migration problem — it is discarded, and
+/// the index rebuilds.
+///
+/// That is why adding snapshots needed no on-disk format version bump. An older build simply
+/// does not find a snapshot it understands and does what it always did.
+///
+/// Implementations must therefore never fail a *search* because a snapshot was bad. `load`
+/// returning `Ok(None)` is the correct response to damage.
+pub trait IndexSnapshots: Debug + Send + Sync {
+    /// The current snapshot, or `None` if there is none this build can use.
+    ///
+    /// # Errors
+    /// Only for a storage failure that a caller should hear about. Damaged or unrecognised
+    /// snapshot content is `Ok(None)`.
+    fn load(&self) -> Result<Option<Vec<u8>>>;
+
+    /// Replace the snapshot.
+    ///
+    /// # Errors
+    /// Any storage error.
+    fn store(&self, bytes: &[u8]) -> Result<()>;
+}
+
+/// Somewhere to put a snapshot that throws it away.
+///
+/// The default for callers that have no storage to offer — tests, and any index that does not
+/// build anything worth keeping.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoSnapshots;
+
+impl IndexSnapshots for NoSnapshots {
+    fn load(&self) -> Result<Option<Vec<u8>>> {
+        Ok(None)
+    }
+
+    fn store(&self, _bytes: &[u8]) -> Result<()> {
+        Ok(())
+    }
+}
+
 /// A nearest-neighbour index.
 pub trait VectorIndex: Debug + Send + Sync {
     /// Which algorithm this is.
@@ -303,8 +350,13 @@ pub trait VectorIndex: Debug + Send + Sync {
     ///
     /// # Errors
     /// Any storage error from reading the source.
-    fn prepare(&self, source: &dyn VectorSource, metric: Metric) -> Result<()> {
-        let _ = (source, metric);
+    fn prepare(
+        &self,
+        source: &dyn VectorSource,
+        metric: Metric,
+        snapshots: &dyn IndexSnapshots,
+    ) -> Result<()> {
+        let _ = (source, metric, snapshots);
         Ok(())
     }
 

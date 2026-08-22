@@ -303,6 +303,34 @@ fn hnsw_against_flat(scale: Scale, vectors: &[Vec<f32>]) -> Result<Vec<Measureme
             truth = answers;
         }
         db.close()?;
+
+        // Reopening is the number that decides whether a graph index is usable in an application
+        // someone waits for. Building it is a one-time cost only if it survives a restart;
+        // otherwise every launch pays it again.
+        if use_hnsw {
+            let storage = Arc::new(OsStorage::open(dir.to_str().unwrap_or("."))?);
+            let db = Database::open_with_index(
+                storage,
+                DatabaseConfig::default().create_if_missing(false),
+                Arc::new(ManualClock::new(1_700_000_000_000)),
+                Arc::new(vdb_index_hnsw::HnswIndex::new()),
+            )?;
+            let c = db.open_collection("bench")?;
+            let (mut m, r) = timed("hnsw_restore", "graph", 1, || {
+                c.search(&SearchRequest::new(
+                    VectorView::f32(vectors.first().map_or(&[][..], Vec::as_slice)),
+                    1,
+                ))
+            });
+            r?;
+            m.note("documents", scale.documents as u64);
+            m.note(
+                "what",
+                "first query after reopen, including reading the snapshot",
+            );
+            out.push(m);
+            db.close()?;
+        }
     }
 
     let mut overlap = 0usize;

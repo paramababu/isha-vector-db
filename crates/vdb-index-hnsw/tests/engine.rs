@@ -168,3 +168,67 @@ fn new_documents_appear_in_later_searches() {
         .unwrap();
     assert_eq!(hits.hits[0].id, "newcomer".into());
 }
+
+/// Reopening a database must not rebuild the graph from scratch.
+///
+/// This is the reason snapshots exist. Without it, a 50,000-vector collection costs 95 seconds
+/// before its first query on every single open, which makes the graph index unusable for
+/// anything a person waits for.
+#[test]
+fn the_graph_survives_a_reopen() {
+    let storage = Arc::new(MemoryStorage::new());
+    let clock = Arc::new(ManualClock::new(1_700_000_000_000));
+    let vectors = corpus(1500, 0xC0FFEE);
+    let q = corpus(1, 0xBEEF).remove(0);
+
+    let first = {
+        let db = Database::open_with_index(
+            Arc::clone(&storage) as Arc<dyn vdb_core::storage::Storage>,
+            DatabaseConfig::default(),
+            Arc::clone(&clock) as Arc<dyn vdb_core::clock::Clock>,
+            Arc::new(HnswIndex::new()),
+        )
+        .unwrap();
+        let c = db
+            .create_collection(CollectionSpec::new("docs", DIM as u32, Metric::Cosine))
+            .unwrap();
+        let mut batch = WriteBatch::with_capacity(vectors.len());
+        for (i, v) in vectors.iter().enumerate() {
+            batch.upsert(DocumentInput::new(
+                format!("doc-{i:05}"),
+                VectorView::f32(v),
+            ));
+        }
+        c.write_batch(batch).unwrap();
+        c.flush().unwrap();
+        let hits = c
+            .search(&SearchRequest::new(VectorView::f32(&q), 10))
+            .unwrap();
+        let ids: Vec<_> = hits.hits.into_iter().map(|h| h.id).collect();
+        db.close().unwrap();
+        ids
+    };
+
+    // A brand-new index over the same storage: the graph can only come from the snapshot.
+    let index = Arc::new(HnswIndex::new());
+    let db = Database::open_with_index(
+        storage,
+        DatabaseConfig::default().create_if_missing(false),
+        clock,
+        Arc::clone(&index) as Arc<dyn vdb_core::index::VectorIndex>,
+    )
+    .unwrap();
+    let c = db.open_collection("docs").unwrap();
+
+    let started = std::time::Instant::now();
+    let hits = c
+        .search(&SearchRequest::new(VectorView::f32(&q), 10))
+        .unwrap();
+    let elapsed = started.elapsed();
+
+    let ids: Vec<_> = hits.hits.into_iter().map(|h| h.id).collect();
+    assert_eq!(ids, first, "the reopened database answered differently");
+    assert_eq!(index.rows(), 1500);
+    println!("first query after reopen: {elapsed:?}");
+    db.close().unwrap();
+}

@@ -18,8 +18,8 @@ use std::collections::HashSet;
 use vdb_core::document::RowId;
 use vdb_core::error::Result;
 use vdb_core::index::{
-    AllLive, Budget, ExactScan, LiveSet, RowPredicate, RowVisitor, SearchCtx, SearchParams,
-    VectorIndex, VectorSource,
+    AllLive, Budget, ExactScan, LiveSet, NoSnapshots, RowPredicate, RowVisitor, SearchCtx,
+    SearchParams, VectorIndex, VectorSource,
 };
 use vdb_core::search::{inv_norm, Metric, TopK};
 use vdb_index_hnsw::{HnswIndex, HnswParams};
@@ -132,7 +132,7 @@ fn run_filtered(
     filter: Option<&dyn RowPredicate>,
 ) -> Vec<u32> {
     let budget = Budget::unlimited();
-    index.prepare(source, metric).unwrap();
+    index.prepare(source, metric, &NoSnapshots).unwrap();
     let ctx = SearchCtx {
         query,
         top_k: k,

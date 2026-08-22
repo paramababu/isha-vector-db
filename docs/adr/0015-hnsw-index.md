@@ -55,13 +55,14 @@ is not hidden — the benchmark reports it separately rather than letting it inf
 query. It is single-threaded and unoptimised beyond the two fixes measurement demanded (see
 below). A comparable C++ implementation is perhaps three times faster.
 
-**The graph is not persisted.** It lives in memory and is rebuilt when the row count, dimension
-or metric changes — including on every reopen. For a 50,000-vector collection that is a 95-second
-wait before the first query, which makes this unsuitable as-is for a cold-start-sensitive
-application. Persisting it needs the `index_snapshot` slot the manifest already reserves, and a
-format version bump; that is the obvious next piece of work and is deliberately not in this one.
-`IndexSpec` in the catalog therefore still records only `Flat`, because nothing about the
-collection's on-disk form has changed.
+**The graph was not persisted** when this was written: it lived in memory and was rebuilt on
+every reopen, a roughly eighty-second wait before the first query on a 50,000-vector collection.
+That is **superseded by [ADR-0016](0016-index-snapshots.md)**, which persists it and restores in
+40.9 ms. The format bump anticipated here turned out to be unnecessary, because a snapshot is a
+cache rather than data.
+
+`IndexSpec` in the catalog still records only `Flat`, because nothing about the collection's
+on-disk form has changed.
 
 ## What measurement changed
 

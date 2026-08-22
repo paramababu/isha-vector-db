@@ -15,8 +15,8 @@
 use vdb_core::document::RowId;
 use vdb_core::error::{DbError, Result};
 use vdb_core::index::{
-    AllLive, Budget, IndexKind, LiveSet, RowPredicate, RowVisitor, SearchCtx, SearchParams,
-    VectorIndex, VectorSource,
+    AllLive, Budget, IndexKind, LiveSet, NoSnapshots, RowPredicate, RowVisitor, SearchCtx,
+    SearchParams, VectorIndex, VectorSource,
 };
 use vdb_core::search::{inv_norm, Metric, TopK};
 use vdb_index_hnsw::{HnswIndex, HnswParams};
@@ -91,7 +91,7 @@ fn search(
     filter: Option<&dyn RowPredicate>,
     budget: &Budget,
 ) -> Result<Vec<u32>> {
-    index.prepare(source, Metric::Cosine)?;
+    index.prepare(source, Metric::Cosine, &NoSnapshots)?;
     let ctx = SearchCtx {
         query,
         top_k: k,
@@ -297,7 +297,7 @@ fn changing_the_metric_rebuilds_the_graph() {
     let query: Vec<f32> = (0..16).map(|i| (i as f32 * 0.3).cos()).collect();
 
     for metric in [Metric::Cosine, Metric::L2, Metric::Dot] {
-        index.prepare(&source, metric).unwrap();
+        index.prepare(&source, metric, &NoSnapshots).unwrap();
         let ctx = SearchCtx {
             query: &query,
             top_k: 5,
@@ -320,7 +320,9 @@ fn changing_the_metric_rebuilds_the_graph() {
 fn a_budget_is_honoured() {
     let source = Rows::random(3000, 32, 17);
     let index = HnswIndex::new();
-    index.prepare(&source, Metric::Cosine).unwrap();
+    index
+        .prepare(&source, Metric::Cosine, &NoSnapshots)
+        .unwrap();
 
     let budget = Budget::with_max_scanned(4);
     let query: Vec<f32> = (0..32).map(|i| (i as f32 * 0.02).sin()).collect();

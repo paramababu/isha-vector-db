@@ -121,35 +121,65 @@ impl PartialOrd for Worst {
 
 /// Build a graph over every row the source holds.
 ///
-/// Rows are taken in the source's own stable order, which together with the hashed level
-/// assignment makes the whole structure a pure function of the data.
+/// Only the tests take this path now: `prepare` decodes the rows itself, because it needs them
+/// to validate a snapshot before deciding whether a build is required at all.
+#[cfg(test)]
 pub(crate) fn build(
     source: &dyn VectorSource,
     metric: Metric,
     params: &HnswParams,
 ) -> Result<Graph> {
+    Ok(build_from(
+        decode_rows(source)?,
+        source.dimension() as usize,
+        metric,
+        params,
+    ))
+}
+
+/// Read every row the source holds, decoded once.
+///
+/// Separate from building because restoring a snapshot needs exactly the same thing: the rows,
+/// in the source's own order, to confirm the saved graph still describes them.
+pub(crate) fn decode_rows(
+    source: &dyn VectorSource,
+) -> Result<Vec<(vdb_core::document::RowId, Vec<f32>, f32)>> {
     let dimension = source.dimension() as usize;
+    let mut out = Vec::with_capacity(source.len());
+    source.for_each(&mut |row, bytes, inv_norm| {
+        out.push((row, decode(bytes, dimension), inv_norm));
+        Ok(())
+    })?;
+    Ok(out)
+}
+
+/// Build a graph over rows already decoded.
+///
+/// Rows are taken in the source's own stable order, which together with the hashed level
+/// assignment makes the whole structure a pure function of the data.
+pub(crate) fn build_from(
+    rows: Vec<(vdb_core::document::RowId, Vec<f32>, f32)>,
+    dimension: usize,
+    metric: Metric,
+    params: &HnswParams,
+) -> Graph {
+    // Taken from the source rather than the first row: an empty collection still has a
+    // dimension, and a graph whose recorded dimension disagreed with the source's would be
+    // judged stale on every single search and rebuilt forever.
     let mut graph = Graph {
         dimension,
         metric: Some(metric),
         ..Graph::default()
     };
-    graph.vectors.reserve(source.len() * dimension);
-
+    graph.vectors.reserve(rows.len() * dimension);
     let mut visited = Visited::default();
-    let mut pending: Vec<(vdb_core::document::RowId, Vec<f32>, f32)> =
-        Vec::with_capacity(source.len());
-    source.for_each(&mut |row, bytes, inv_norm| {
-        pending.push((row, decode(bytes, dimension), inv_norm));
-        Ok(())
-    })?;
 
-    for (row, vector, inv_norm) in pending {
+    for (row, vector, inv_norm) in rows {
         let level = level_for(row, params);
         let node = graph.push_node(row, &vector, inv_norm, level);
         insert(&mut graph, node, metric, params, &mut visited);
     }
-    Ok(graph)
+    graph
 }
 
 /// Decode a row's raw bytes into floats.

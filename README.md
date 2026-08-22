@@ -72,7 +72,7 @@ Nothing at or below the public API knows which platform it is on. That is enforc
 | Filters in Node | Done |
 | Filters in Java, with metadata writing | Done |
 | Compaction, verification and stats in every SDK | Done |
-| HNSW graph index — 12.8x faster than the SIMD scan at 0.974 recall | Done (graph not persisted) |
+| HNSW graph index — 9-13x faster than the SIMD scan at 0.974 recall, graph persisted | Done |
 | Web / WASM — WebAssembly module, OPFS storage, 7 SDK tests | Done (real OPFS unverified) |
 | Flutter, React Native | Next |
 | `vdb-index-flat`, search, filters | Not started |

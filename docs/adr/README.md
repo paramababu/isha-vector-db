@@ -24,6 +24,7 @@ answer belongs in an ADR.
 | 0013 | Deterministic ranking, architecture-dependent score ULPs, opt-in deterministic kernels | Accepted | [06 §6.3](../architecture/06-index-and-search.md#63-determinism-and-floating-point--the-subtle-part) |
 | 0014 | Field offset table in maps of eight fields or more (format v2) | Accepted | [ADR-0014](0014-metadata-offset-table.md) |
 | 0015 | HNSW graph index, chosen at open time, held in memory | Accepted | [ADR-0015](0015-hnsw-index.md) |
+| 0016 | An index snapshot is a cache, not data | Accepted | [ADR-0016](0016-index-snapshots.md) |
 
 ## ADR-0004 in full (it is the one most likely to be questioned)
 
