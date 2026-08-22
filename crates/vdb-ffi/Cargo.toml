@@ -1,0 +1,22 @@
+[package]
+name = "vdb-ffi"
+description = "The stable C ABI for vdb. One contract, consumed by every native SDK."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lib]
+# rlib so the Rust tests can link it; cdylib and staticlib are what the SDKs actually ship.
+crate-type = ["rlib", "cdylib", "staticlib"]
+
+[dependencies]
+vdb-core.workspace = true
+vdb-format.workspace = true
+vdb-index-flat.workspace = true
+vdb-storage-os.workspace = true
+
+[lints]
+workspace = true

@@ -95,6 +95,12 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
   only the named field, skipping the rest without allocating. Filtered search went from 1.5×
   slower than an unfiltered scan to break-even. No format change — the existing sorted-key
   encoding already supports an early stop.
+- **The C ABI** (`vdb-ffi`, `include/vdb.h`): 25 functions covering lifecycle, collections,
+  documents, search and metadata. Opaque handles, pointer-plus-length strings, zero-copy
+  vectors, out-parameter errors with stable codes, `catch_unwind` at every entry point, and a
+  null check on every pointer. Guarded by a bidirectional header/implementation drift test, an
+  ABI behaviour suite, a real C program compiled and run in CI on Linux and macOS, a
+  version-bump gate, and a 1.5 MB size budget.
 - CI: `ci-format` refuses a golden-fixture change without a declared `FORMAT-CHANGE:` and a
   `FORMAT_VERSION` bump; `nightly` runs each fuzz target for an hour and reports coverage.
 

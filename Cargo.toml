@@ -4,6 +4,7 @@ members = [
     "crates/vdb-bench",
     "crates/vdb-cli",
     "crates/vdb-core",
+    "crates/vdb-ffi",
     "crates/vdb-format",
     "crates/vdb-index-flat",
     "crates/vdb-storage-memory",

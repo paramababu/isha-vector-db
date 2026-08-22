@@ -64,7 +64,8 @@ Nothing at or below the public API knows which platform it is on. That is enforc
 | Compaction, verification, `vdb` CLI | Done |
 | Benchmark harness and committed baseline | Done |
 | SIMD kernels (NEON, AVX2, simd128) | Done |
-| Freeze the C ABI, then the Node SDK | Next |
+| C ABI (`vdb.h`), frozen and guarded | Done |
+| Node SDK, then the mobile SDKs | Next |
 | `vdb-index-flat`, search, filters | Not started |
 | `vdb-storage-os` | Not started |
 | C ABI, SDKs, HNSW, web | Later phases |

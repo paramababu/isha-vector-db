@@ -39,6 +39,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "vdb-ffi"
+version = "0.0.1"
+dependencies = [
+ "vdb-core",
+ "vdb-format",
+ "vdb-index-flat",
+ "vdb-storage-os",
+]
+
+[[package]]
 name = "vdb-format"
 version = "0.0.1"
 

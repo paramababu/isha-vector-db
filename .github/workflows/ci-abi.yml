@@ -1,0 +1,83 @@
+name: ci-abi
+
+# The C ABI is the contract four native SDKs are built on. Once they exist, a change here is a
+# change to all of them — so it is guarded more tightly than anything else in the repository.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  header:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Header and implementation declare the same functions
+        run: cargo test -p vdb-ffi --test header_matches
+      - name: The ABI behaves as documented
+        run: cargo test -p vdb-ffi --test abi
+
+  c-caller:
+    # Compiling from C is the only way to catch a header that does not compile, or a declaration
+    # C spells differently from Rust.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: ./scripts/check-c-abi.sh
+
+  abi-version:
+    # An ABI change without a version bump is the failure a binding cannot detect at runtime.
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: A changed header requires a bumped vdb_abi_version
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          base="origin/${{ github.base_ref }}"
+          if git diff --quiet "$base"...HEAD -- crates/vdb-ffi/include/; then
+            echo "header unchanged."
+            exit 0
+          fi
+          echo "include/vdb.h changed in this PR:"
+          git diff --stat "$base"...HEAD -- crates/vdb-ffi/include/
+          if git diff "$base"...HEAD -- crates/vdb-ffi/src/lib.rs | grep -q 'VDB_ABI_VERSION'; then
+            echo "VDB_ABI_VERSION touched."
+            exit 0
+          fi
+          if [[ "$BODY" == *"ABI-COMMENT-ONLY:"* ]]; then
+            echo "declared comment-only."
+            exit 0
+          fi
+          echo
+          echo "FAIL: the header changed but VDB_ABI_VERSION did not."
+          echo "Bump it, or write 'ABI-COMMENT-ONLY:' in the PR body if only prose changed."
+          exit 1
+
+  size:
+    # Mobile app-size budgets are real and are a common reason a library gets rejected.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release -p vdb-ffi
+      - name: The shared library stays under the size budget
+        run: |
+          strip target/release/libvdb_ffi.so || true
+          bytes=$(stat -c%s target/release/libvdb_ffi.so)
+          echo "stripped cdylib: $bytes bytes"
+          limit=$((1500 * 1024))
+          if [[ $bytes -gt $limit ]]; then
+            echo "FAIL: over the 1.5 MB budget from docs/architecture/01-scope.md §1.3"
+            exit 1
+          fi
