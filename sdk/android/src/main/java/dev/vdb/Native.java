@@ -89,4 +89,20 @@ final class Native {
   static native int filterDepth(long filter);
 
   static native long searchFiltered(long collection, float[] query, int topK, long filter);
+
+  /**
+   * Counters, packed into a long[] rather than a Java object.
+   *
+   * <p>Building an object from JNI means resolving a class, a constructor and six field types
+   * on every call. A primitive array is one allocation and no lookups, and the Java layer turns
+   * it into a real type where that is cheap.
+   *
+   * <p>Layout: live, totalRows, segments, buffered, deadRatioMillis, dimension.
+   */
+  static native long[] collectionStats(long collection);
+
+  static native long compact(long db, double minDeadRatio);
+
+  /** Returns {errors, warnings}. */
+  static native long[] verify(long db, int level);
 }

@@ -110,6 +110,35 @@ public final class Database: @unchecked Sendable {
         }
     }
 
+    /// Reclaim the space held by tombstoned rows, returning how many were removed.
+    ///
+    /// Explicit rather than automatic: rewriting hundreds of megabytes is a decision about when
+    /// to spend I/O and battery, and an application knows more about that than the engine does.
+    /// On iOS the obvious moment is a background task while charging. Use
+    /// ``Collection/stats()``'s `deadRatio` to decide whether it is worth it.
+    ///
+    /// - Parameter minDeadRatio: how dead a segment must be before it is rewritten. `0` rewrites
+    ///   everything.
+    @discardableResult
+    public func compact(minDeadRatio: Float = 0.3) throws -> UInt64 {
+        let live = try alive()
+        var reclaimed: UInt64 = 0
+        try check { vdb_compact(live, minDeadRatio, &reclaimed, $0) }
+        return reclaimed
+    }
+
+    /// Check the database's integrity.
+    ///
+    /// Reports rather than repairs: a damaged database is a result, not a thrown error.
+    /// Deciding what to discard is not a choice a library should make on your behalf.
+    public func verify(_ level: VerifyLevel = .checksums) throws -> VerifyReport {
+        let live = try alive()
+        var errors: UInt64 = 0
+        var warnings: UInt64 = 0
+        try check { vdb_verify(live, level.raw, &errors, &warnings, $0) }
+        return VerifyReport(errors: Int(errors), warnings: Int(warnings))
+    }
+
     private func alive() throws -> OpaquePointer {
         guard let handle else {
             throw VdbError(code: 2003, message: "[VDB-2003] the database is closed")

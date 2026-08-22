@@ -141,6 +141,23 @@ export declare class Collection {
   stats(): CollectionStats;
 }
 
+export interface VerifyReport {
+  /** Problems meaning data is damaged or unreadable. */
+  errors: number;
+  /** Things that are odd but not damage — orphan files, an unusually high dead ratio. */
+  warnings: number;
+  /** The error messages, so you can log or report them. */
+  messages: string[];
+}
+
+export type VerifyLevel =
+  /** Headers and the manifest. Milliseconds, whatever the size. */
+  | 'quick'
+  /** Every block's checksum. Reads every byte. The default. */
+  | 'checksums'
+  /** Checksums plus cross-file consistency. */
+  | 'full';
+
 export declare class Database {
   readonly isOpen: boolean;
   /** Create a collection, or open it if one exists with a matching shape. */
@@ -150,6 +167,18 @@ export declare class Database {
   dropCollection(name: string): void;
   listCollections(): string[];
   flush(): void;
+  /**
+   * Reclaim the space held by tombstoned rows, returning how many were removed.
+   *
+   * Explicit rather than automatic: rewriting hundreds of megabytes is a decision about when to
+   * spend I/O, and your application knows more about that than the engine does. Use a
+   * collection's `deadRatio` to decide.
+   *
+   * @param minDeadRatio how dead a segment must be before it is rewritten; 0 rewrites all.
+   */
+  compact(minDeadRatio?: number): number;
+  /** Check integrity. Reports rather than repairs — a damaged database is a result, not a throw. */
+  verify(level?: VerifyLevel): VerifyReport;
   /** Flush and close, releasing the lock. Idempotent. */
   close(): void;
   [Symbol.dispose](): void;

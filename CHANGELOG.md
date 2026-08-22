@@ -129,6 +129,10 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
   with `and`/`or`/`not` that flattens to postfix on the way down. Plain classes rather than
   sealed interfaces or records, because this ships to Android where those need a recent API
   level or desugaring.
+- **Compaction, verification and stats in every SDK**: `vdb_compact`, `vdb_verify`,
+  `vdb_collection_stats` and `vdb_collection_flush` in the C ABI, with idiomatic wrappers in
+  Swift, Java and Node. Until now only Rust and the CLI could reclaim space or check integrity,
+  which was backwards for the platforms where storage is scarcest.
 - CI: `ci-format` refuses a golden-fixture change without a declared `FORMAT-CHANGE:` and a
   `FORMAT_VERSION` bump; `nightly` runs each fuzz target for an hour and reports coverage.
 

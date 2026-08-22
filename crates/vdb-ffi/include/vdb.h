@@ -157,6 +157,14 @@ void vdb_collection_free(vdb_collection_t *collection);
 int32_t vdb_collection_count(const vdb_collection_t *collection, uint64_t *out,
                              vdb_error_t **err);
 
+/*
+ * Fold one collection's buffered writes into a segment.
+ *
+ * vdb_flush() does every collection; this does one, which is what you want after writing to a
+ * single collection without paying for the others.
+ */
+int32_t vdb_collection_flush(const vdb_collection_t *collection, vdb_error_t **err);
+
 /* ---- documents ---------------------------------------------------------- */
 
 /*
@@ -206,6 +214,57 @@ const uint8_t *vdb_results_id(const vdb_results_t *results, size_t index, size_t
 
 /* Release a search result. NULL is a no-op. */
 void vdb_results_free(vdb_results_t *results);
+
+/* ---- maintenance -------------------------------------------------------- */
+
+typedef enum {
+  VDB_VERIFY_QUICK = 1,     /* headers and the manifest; milliseconds at any size */
+  VDB_VERIFY_CHECKSUMS = 2, /* every block checksum; reads every byte */
+  VDB_VERIFY_FULL = 3       /* checksums plus cross-file consistency */
+} vdb_verify_t;
+
+/*
+ * Counters for a collection.
+ *
+ * A plain struct rather than an opaque handle: it is small, fixed and read once, and a handle
+ * would mean an allocation, several accessor calls and a free for six numbers.
+ */
+typedef struct {
+  uint64_t live_documents;
+  uint64_t total_rows; /* including tombstones */
+  uint64_t segments;
+  uint64_t buffered_documents; /* written but not yet in a segment */
+  float dead_ratio;            /* 0 to 1; the number that says whether to compact */
+  uint32_t dimension;
+} vdb_stats_t;
+
+int32_t vdb_collection_stats(const vdb_collection_t *collection, vdb_stats_t *out,
+                             vdb_error_t **err);
+
+/*
+ * Reclaim the space held by tombstoned rows, across every collection.
+ *
+ * Explicit rather than automatic: rewriting hundreds of megabytes is a decision about when to
+ * spend I/O and battery, and your application knows more about that than the engine does — when
+ * the device is charging, when the user is not waiting, when the screen is off. Use
+ * vdb_collection_stats()'s dead_ratio to decide.
+ *
+ * min_dead_ratio is how dead a segment must be before it is worth rewriting; 0.0 rewrites
+ * everything. out_rows_reclaimed may be NULL.
+ */
+int32_t vdb_compact(const vdb_db_t *db, float min_dead_ratio, uint64_t *out_rows_reclaimed,
+                    vdb_error_t **err);
+
+/*
+ * Check the database's integrity.
+ *
+ * Reports rather than repairs. out_errors receives the number of problems found, and the return
+ * value is VDB_OK unless verification could not run at all — a damaged database is a result,
+ * not a failure to produce one. Deciding what to discard is not a choice a library should make
+ * on someone's behalf. Both out-parameters may be NULL.
+ */
+int32_t vdb_verify(const vdb_db_t *db, int32_t level, uint64_t *out_errors,
+                   uint64_t *out_warnings, vdb_error_t **err);
 
 /* ---- filters ------------------------------------------------------------ */
 

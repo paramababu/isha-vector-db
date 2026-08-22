@@ -29,8 +29,8 @@ use jni::sys::{jboolean, jdouble, jfloat, jint, jlong, jsize, JNI_FALSE, JNI_TRU
 use jni::JNIEnv;
 
 use vdb_core::api::{
-    Collection, CollectionSpec, Database, DatabaseConfig, SearchRequest, SearchResponse,
-    UpsertOutcome,
+    Collection, CollectionSpec, CompactOptions, Database, DatabaseConfig, SearchRequest,
+    SearchResponse, UpsertOutcome, VerifyLevel,
 };
 use vdb_core::clock::Clock;
 use vdb_core::document::{DocId, DocumentInput, Include};
@@ -940,4 +940,131 @@ pub extern "system" fn Java_dev_vdb_Native_searchFiltered<'local>(
             0
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// maintenance
+// ---------------------------------------------------------------------------
+
+/// Counters, packed into a `long[]`.
+///
+/// Building a Java object from here means resolving a class, a constructor and six field types
+/// on every call. A primitive array is one allocation and no lookups; the Java layer turns it
+/// into a real type, where that costs nothing.
+///
+/// Layout: live, total rows, segments, buffered, dead ratio in thousandths, dimension. The dead
+/// ratio is carried as an integer because `jlong[]` has no room for a float and a second array
+/// for one number would be worse than the rounding.
+#[no_mangle]
+pub extern "system" fn Java_dev_vdb_Native_collectionStats<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jlong,
+) -> jni::objects::JLongArray<'local> {
+    let empty = env.new_long_array(0).unwrap_or_default();
+    // SAFETY: the Java layer guarantees a live handle.
+    let Some(c) = (unsafe { as_ref::<Collection>(handle) }) else {
+        throw_msg(&mut env, "the collection is closed");
+        return empty;
+    };
+    let stats = match c.stats() {
+        Ok(s) => s,
+        Err(e) => {
+            throw(&mut env, &e);
+            return empty;
+        }
+    };
+    let values: [jlong; 6] = [
+        stats.live_documents as jlong,
+        stats.total_rows as jlong,
+        stats.segments as jlong,
+        stats.buffered_documents as jlong,
+        (f64::from(stats.dead_ratio) * 1000.0).round() as jlong,
+        jlong::from(stats.dimension),
+    ];
+    let Ok(array) = env.new_long_array(values.len() as jsize) else {
+        throw_msg(&mut env, "could not allocate the stats array");
+        return empty;
+    };
+    if env.set_long_array_region(&array, 0, &values).is_err() {
+        throw_msg(&mut env, "could not fill the stats array");
+        return empty;
+    }
+    array
+}
+
+/// Reclaim the space held by tombstoned rows. Returns how many were removed, or -1 on failure.
+#[no_mangle]
+pub extern "system" fn Java_dev_vdb_Native_compact<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jlong,
+    min_dead_ratio: jdouble,
+) -> jlong {
+    // SAFETY: the Java layer guarantees a live handle.
+    let Some(db) = (unsafe { as_ref::<Database>(handle) }) else {
+        throw_msg(&mut env, "the database is closed");
+        return -1;
+    };
+    if !(0.0..=1.0).contains(&min_dead_ratio) {
+        // Refused rather than clamped: clamping would silently do something other than asked.
+        throw_msg(&mut env, "minDeadRatio must be between 0 and 1");
+        return -1;
+    }
+    let options = CompactOptions::default().min_dead_ratio(min_dead_ratio as f32);
+    match db.compact(options) {
+        Ok(report) => report.rows_reclaimed as jlong,
+        Err(e) => {
+            throw(&mut env, &e);
+            -1
+        }
+    }
+}
+
+/// Check integrity. Returns `{errors, warnings}`.
+///
+/// A damaged database is a result, not an exception: deciding what to discard is not a choice a
+/// library should make on an application's behalf, and it cannot make one from an exception.
+#[no_mangle]
+pub extern "system" fn Java_dev_vdb_Native_verify<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jlong,
+    level: jint,
+) -> jni::objects::JLongArray<'local> {
+    let empty = env.new_long_array(0).unwrap_or_default();
+    // SAFETY: the Java layer guarantees a live handle.
+    let Some(db) = (unsafe { as_ref::<Database>(handle) }) else {
+        throw_msg(&mut env, "the database is closed");
+        return empty;
+    };
+    let level = match level {
+        1 => VerifyLevel::Quick,
+        2 => VerifyLevel::Checksums,
+        3 => VerifyLevel::Full,
+        _ => {
+            throw_msg(
+                &mut env,
+                "unknown verify level; expected QUICK, CHECKSUMS or FULL",
+            );
+            return empty;
+        }
+    };
+    let report = match db.verify(level) {
+        Ok(r) => r,
+        Err(e) => {
+            throw(&mut env, &e);
+            return empty;
+        }
+    };
+    let values: [jlong; 2] = [report.errors.len() as jlong, report.warnings.len() as jlong];
+    let Ok(array) = env.new_long_array(2) else {
+        throw_msg(&mut env, "could not allocate the report array");
+        return empty;
+    };
+    if env.set_long_array_region(&array, 0, &values).is_err() {
+        throw_msg(&mut env, "could not fill the report array");
+        return empty;
+    }
+    array
 }

@@ -71,6 +71,7 @@ Nothing at or below the public API knows which platform it is on. That is enforc
 | Metadata filters across the C ABI and Swift | Done |
 | Filters in Node | Done |
 | Filters in Java, with metadata writing | Done |
+| Compaction, verification and stats in every SDK | Done |
 | Flutter, React Native, Web | Next |
 | `vdb-index-flat`, search, filters | Not started |
 | `vdb-storage-os` | Not started |
@@ -197,6 +198,21 @@ try db.close()
 Static, not dynamic — a dynamic framework costs dyld time at launch that an embedded database has
 no business spending. Linking it adds **662 KB** to an application with dead-stripping, which is
 what Xcode does for release builds.
+
+## Managing storage
+
+Deletes and overwrites only mark rows dead; the bytes stay until something reclaims them. Every
+SDK can now see that and act on it:
+
+```js
+const { deadRatio } = docs.stats();
+if (deadRatio > 0.4) db.compact();        // explicit, because it costs I/O and battery
+const report = db.verify('full');          // reports rather than repairs
+```
+
+Compaction is never automatic. Rewriting hundreds of megabytes is a decision about *when* to
+spend I/O — a `WorkManager` job while charging, a background task on iOS — and the application
+knows that and the engine does not.
 
 ## The `vdb` tool
 

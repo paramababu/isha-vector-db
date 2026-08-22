@@ -88,6 +88,50 @@ public enum Metric {
     }
 }
 
+/// How thoroughly to check a database.
+public enum VerifyLevel {
+    /// Headers and the manifest. Milliseconds, whatever the size.
+    case quick
+    /// Every block's checksum. Reads every byte, so it costs what the database is big.
+    case checksums
+    /// Checksums plus cross-file consistency.
+    case full
+
+    var raw: Int32 {
+        switch self {
+        case .quick: return Int32(VDB_VERIFY_QUICK.rawValue)
+        case .checksums: return Int32(VDB_VERIFY_CHECKSUMS.rawValue)
+        case .full: return Int32(VDB_VERIFY_FULL.rawValue)
+        }
+    }
+}
+
+/// What verification found.
+public struct VerifyReport: Sendable, Equatable {
+    /// Problems meaning data is damaged or unreadable.
+    public let errors: Int
+    /// Things that are odd but not damage — orphan files, an unusually high dead ratio.
+    public let warnings: Int
+    /// Whether nothing was found wrong.
+    public var isClean: Bool { errors == 0 }
+}
+
+/// Counters for a collection.
+public struct Stats: Sendable, Equatable {
+    /// Live documents.
+    public let liveDocuments: UInt64
+    /// Rows on disk, tombstones included.
+    public let totalRows: UInt64
+    /// Segments on disk.
+    public let segments: UInt64
+    /// Documents written but not yet folded into a segment.
+    public let bufferedDocuments: UInt64
+    /// Fraction of rows that are tombstones, 0 to 1. The number that says whether to compact.
+    public let deadRatio: Float
+    /// Vector dimension.
+    public let dimension: UInt32
+}
+
 /// One search result.
 public struct Hit: Sendable, Equatable {
     /// The document's id.

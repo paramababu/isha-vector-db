@@ -64,6 +64,35 @@ public final class Database implements AutoCloseable {
     }
   }
 
+  /**
+   * Reclaim the space held by tombstoned rows, returning how many were removed.
+   *
+   * <p>Explicit rather than automatic: rewriting hundreds of megabytes is a decision about when
+   * to spend I/O and battery, and an application knows more about that than the engine does. On
+   * Android the obvious moment is a {@code WorkManager} job constrained to charging and idle.
+   * Use {@link Collection#stats()}'s {@code deadRatio} to decide whether it is worth it.
+   *
+   * @param minDeadRatio how dead a segment must be before it is rewritten; 0 rewrites everything
+   */
+  public long compact(double minDeadRatio) {
+    return Native.compact(alive(), minDeadRatio);
+  }
+
+  /** Reclaim space from segments that are at least 30% tombstones. */
+  public long compact() {
+    return compact(0.3);
+  }
+
+  /** Check the database's integrity. Reports rather than repairs. */
+  public VerifyReport verify(Vdb.VerifyLevel level) {
+    return new VerifyReport(Native.verify(alive(), level.value));
+  }
+
+  /** Check checksums. */
+  public VerifyReport verify() {
+    return verify(Vdb.VerifyLevel.CHECKSUMS);
+  }
+
   private long alive() {
     if (handle == 0) {
       throw new VdbException("the database is closed");

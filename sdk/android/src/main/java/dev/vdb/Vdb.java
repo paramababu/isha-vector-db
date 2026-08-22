@@ -45,6 +45,22 @@ public final class Vdb {
     }
   }
 
+  /** How thoroughly to check a database. */
+  public enum VerifyLevel {
+    /** Headers and the manifest. Milliseconds, whatever the size. */
+    QUICK(1),
+    /** Every block's checksum. Reads every byte. */
+    CHECKSUMS(2),
+    /** Checksums plus cross-file consistency. */
+    FULL(3);
+
+    final int value;
+
+    VerifyLevel(int value) {
+      this.value = value;
+    }
+  }
+
   /** Open or create a database at a directory path. */
   public static Database open(String path) {
     return open(path, true, false, Durability.BATCH);

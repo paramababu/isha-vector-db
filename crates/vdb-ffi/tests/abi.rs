@@ -721,6 +721,135 @@ fn an_unbalanced_filter_is_refused_rather_than_interpreted() {
     unsafe { vdb_close(db, &mut err) };
 }
 
+// ---------------------------------------------------------------------------
+// maintenance
+// ---------------------------------------------------------------------------
+
+#[test]
+fn stats_compaction_and_verification_work_through_the_abi() {
+    let dir = TempDir::new("maintenance");
+    let (db, c) = corpus(&dir);
+    let mut err = ptr::null_mut();
+
+    // Delete two of three, then flush so the tombstones reach disk.
+    // Flush first, *then* delete, then flush again. Order matters, and the first attempt at
+    // this test got it wrong: deleting a document that was never written to a segment costs
+    // nothing to reclaim, because there is nothing on disk to reclaim. Tombstones only occupy
+    // space once the rows they shadow have been flushed.
+    let mut existed = false;
+    unsafe {
+        assert_eq!(vdb_flush(db, &mut err), VDB_OK, "{}", message(err));
+        vdb_delete(c, b"hammer".as_ptr(), 6, &mut existed, &mut err);
+        vdb_delete(c, b"saw".as_ptr(), 3, &mut existed, &mut err);
+        assert_eq!(vdb_flush(db, &mut err), VDB_OK, "{}", message(err));
+    }
+
+    let mut stats = vdb_ffi::VdbStats::default();
+    assert_eq!(
+        unsafe { vdb_collection_stats(c, &mut stats, &mut err) },
+        VDB_OK
+    );
+    assert_eq!(stats.live_documents, 1);
+    assert_eq!(stats.total_rows, 3, "the dead rows are still on disk");
+    assert_eq!(stats.dimension, 2);
+    assert!(
+        stats.dead_ratio > 0.6,
+        "dead_ratio was {}",
+        stats.dead_ratio
+    );
+
+    // A healthy database verifies clean at every level.
+    for level in [1, 2, 3] {
+        let (mut errors, mut warnings) = (u64::MAX, u64::MAX);
+        let rc = unsafe { vdb_verify(db, level, &mut errors, &mut warnings, &mut err) };
+        assert_eq!(rc, VDB_OK, "level {level}: {}", message(err));
+        assert_eq!(errors, 0, "level {level} reported {errors} errors");
+        // Two thirds dead is worth warning about.
+        assert!(
+            warnings > 0,
+            "level {level} should warn about the dead ratio"
+        );
+    }
+    assert_eq!(
+        unsafe { vdb_verify(db, 99, ptr::null_mut(), ptr::null_mut(), &mut err) },
+        VDB_INVALID_ARGUMENT
+    );
+
+    // Compaction reclaims them without losing the survivor.
+    let mut reclaimed = 0u64;
+    assert_eq!(
+        unsafe { vdb_compact(db, 0.3, &mut reclaimed, &mut err) },
+        VDB_OK,
+        "{}",
+        message(err)
+    );
+    assert_eq!(reclaimed, 2);
+
+    assert_eq!(
+        unsafe { vdb_collection_stats(c, &mut stats, &mut err) },
+        VDB_OK
+    );
+    assert_eq!(
+        stats.live_documents, 1,
+        "compaction must not lose a document"
+    );
+    assert_eq!(stats.total_rows, 1, "the dead rows should be gone");
+    assert_eq!(stats.dead_ratio, 0.0);
+
+    // Still searchable, and still clean.
+    let query = [0.7f32, 0.7];
+    let mut results = ptr::null_mut();
+    assert_eq!(
+        unsafe { vdb_search(c, query.as_ptr(), 2, 5, &mut results, &mut err) },
+        VDB_OK
+    );
+    assert_eq!(unsafe { vdb_results_len(results) }, 1);
+    unsafe { vdb_results_free(results) };
+
+    let mut errors = u64::MAX;
+    unsafe { vdb_verify(db, 3, &mut errors, ptr::null_mut(), &mut err) };
+    assert_eq!(errors, 0);
+
+    unsafe { vdb_collection_free(c) };
+    unsafe { vdb_close(db, &mut err) };
+}
+
+#[test]
+fn maintenance_refuses_misuse() {
+    let mut err = ptr::null_mut();
+    let mut stats = vdb_ffi::VdbStats::default();
+    unsafe {
+        assert_eq!(
+            vdb_collection_stats(ptr::null(), &mut stats, &mut err),
+            VDB_NULL_POINTER
+        );
+        assert_eq!(
+            vdb_compact(ptr::null(), 0.5, ptr::null_mut(), &mut err),
+            VDB_NULL_POINTER
+        );
+        assert_eq!(
+            vdb_verify(ptr::null(), 1, ptr::null_mut(), ptr::null_mut(), &mut err),
+            VDB_NULL_POINTER
+        );
+    }
+
+    // A ratio outside 0..=1 is meaningless rather than clamped: clamping would silently do
+    // something other than what was asked.
+    let dir = TempDir::new("maintenance-misuse");
+    let db = open(&dir);
+    unsafe {
+        assert_eq!(
+            vdb_compact(db, -1.0, ptr::null_mut(), &mut err),
+            VDB_INVALID_ARGUMENT
+        );
+        assert_eq!(
+            vdb_compact(db, 2.0, ptr::null_mut(), &mut err),
+            VDB_INVALID_ARGUMENT
+        );
+        vdb_close(db, &mut err);
+    }
+}
+
 #[test]
 fn filter_misuse_is_refused_without_crashing() {
     let mut err = ptr::null_mut();

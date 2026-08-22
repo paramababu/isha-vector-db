@@ -108,6 +108,29 @@ public final class Collection: @unchecked Sendable {
         return value
     }
 
+    /// Fold this collection's buffered writes into a segment.
+    ///
+    /// ``Database/flush()`` does every collection; this does one.
+    public func flush() throws {
+        let live = try alive()
+        try check { vdb_collection_flush(live, $0) }
+    }
+
+    /// Counters, including the dead ratio that says whether compaction is worth running.
+    public func stats() throws -> Stats {
+        let live = try alive()
+        var raw = vdb_stats_t()
+        try check { vdb_collection_stats(live, &raw, $0) }
+        return Stats(
+            liveDocuments: raw.live_documents,
+            totalRows: raw.total_rows,
+            segments: raw.segments,
+            bufferedDocuments: raw.buffered_documents,
+            deadRatio: raw.dead_ratio,
+            dimension: raw.dimension
+        )
+    }
+
     /// Find the nearest documents.
     ///
     /// Ordered by score descending, ties broken by ascending id.

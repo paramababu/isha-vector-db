@@ -27,6 +27,7 @@ public final class SmokeTest {
       lockIsExclusive(dir.resolve("lock").toString());
       persistence(dir.resolve("persist").toString());
       metadataAndFilters(dir.resolve("filters").toString());
+      maintenance(dir.resolve("maintenance").toString());
     } finally {
       deleteRecursively(dir);
     }
@@ -166,6 +167,44 @@ public final class SmokeTest {
       out.add(hit.id());
     }
     return out;
+  }
+
+  /** Stats, compaction and verification — the tools an app needs to manage its own storage. */
+  static void maintenance(String path) {
+    try (Database db = Vdb.open(path);
+        Collection c = db.collection("docs", 2)) {
+      for (int i = 0; i < 10; i++) {
+        c.upsert("doc-" + i, new float[] {i, 1});
+      }
+      // Flush first: a delete only occupies space once the row it shadows is on disk.
+      c.flush();
+      for (int i = 0; i < 7; i++) {
+        c.delete("doc-" + i);
+      }
+      c.flush();
+
+      Stats before = c.stats();
+      check("live count", before.liveDocuments == 3);
+      check("rows still on disk", before.totalRows == 10);
+      check("dead ratio", before.deadRatio > 0.6 && before.deadRatio < 0.8);
+      check("dimension reported", before.dimension == 2);
+
+      VerifyReport clean = db.verify(Vdb.VerifyLevel.FULL);
+      check("healthy database verifies clean", clean.isClean());
+      check("but warns about the dead ratio", clean.warnings > 0);
+
+      long reclaimed = db.compact();
+      check("reclaimed the dead rows", reclaimed == 7);
+
+      Stats after = c.stats();
+      check("survivors kept", after.liveDocuments == 3);
+      check("space reclaimed", after.totalRows == 3);
+      check("nothing dead left", after.deadRatio == 0.0);
+      check("still verifies clean", db.verify(Vdb.VerifyLevel.FULL).isClean());
+      check("still searchable", c.search(new float[] {9, 1}, 1).get(0).id().equals("doc-9"));
+
+      expectThrow("a nonsensical ratio", () -> db.compact(2.0));
+    }
   }
 
   // ---- tiny harness -------------------------------------------------------

@@ -43,7 +43,8 @@ use napi::bindgen_prelude::{Float32Array, Object, Result};
 use napi::Error as NapiError;
 
 use vdb_core::api::{
-    CollectionSpec, Database as CoreDatabase, DatabaseConfig, SearchRequest, UpsertOutcome,
+    CollectionSpec, CompactOptions, Database as CoreDatabase, DatabaseConfig, SearchRequest,
+    UpsertOutcome, VerifyLevel,
 };
 use vdb_core::clock::Clock;
 use vdb_core::document::{DocId, DocumentInput, Include};
@@ -112,6 +113,18 @@ pub struct Hit {
     pub score: f64,
     /// The metric-native distance, absent for the inner product.
     pub distance: Option<f64>,
+}
+
+/// What verification found.
+#[napi(object)]
+#[derive(Debug)]
+pub struct VerifyReport {
+    /// Problems meaning data is damaged or unreadable.
+    pub errors: u32,
+    /// Things that are odd but not damage — orphan files, an unusually high dead ratio.
+    pub warnings: u32,
+    /// The error messages, so an application can log or report them.
+    pub messages: Vec<String>,
 }
 
 /// Counters for a collection.
@@ -234,6 +247,49 @@ impl Database {
     #[napi]
     pub fn flush(&self) -> Result<()> {
         self.live()?.flush().map_err(to_js)
+    }
+
+    /// Reclaim the space held by tombstoned rows, returning how many were removed.
+    ///
+    /// Explicit rather than automatic: rewriting hundreds of megabytes is a decision about when
+    /// to spend I/O, and an application knows more about that than the engine does. Use a
+    /// collection's `deadRatio` to decide whether it is worth it.
+    #[napi]
+    pub fn compact(&self, min_dead_ratio: Option<f64>) -> Result<i64> {
+        let db = self.live()?;
+        let ratio = min_dead_ratio.unwrap_or(0.3);
+        if !(0.0..=1.0).contains(&ratio) {
+            // Refused rather than clamped: clamping would silently do something else.
+            return Err(NapiError::from_reason(
+                "minDeadRatio must be between 0 and 1".to_owned(),
+            ));
+        }
+        let options = CompactOptions::default().min_dead_ratio(ratio as f32);
+        Ok(db.compact(options).map_err(to_js)?.rows_reclaimed as i64)
+    }
+
+    /// Check the database's integrity.
+    ///
+    /// Reports rather than repairs: a damaged database is a result, not a thrown error.
+    #[napi]
+    pub fn verify(&self, level: Option<String>) -> Result<VerifyReport> {
+        let db = self.live()?;
+        let level = match level.as_deref() {
+            Some("quick") => VerifyLevel::Quick,
+            None | Some("checksums") => VerifyLevel::Checksums,
+            Some("full") => VerifyLevel::Full,
+            Some(other) => {
+                return Err(NapiError::from_reason(format!(
+                    "unknown verify level {other:?}; expected \"quick\", \"checksums\" or \"full\""
+                )))
+            }
+        };
+        let report = db.verify(level).map_err(to_js)?;
+        Ok(VerifyReport {
+            errors: report.errors.len() as u32,
+            warnings: report.warnings.len() as u32,
+            messages: report.errors,
+        })
     }
 
     /// Flush and close, releasing the lock.

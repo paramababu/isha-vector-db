@@ -378,3 +378,59 @@ test('filters work after a flush, out of a segment', () => {
     );
   });
 });
+
+
+// ---------------------------------------------------------------------------
+// maintenance
+// ---------------------------------------------------------------------------
+
+test('stats, compaction and verification', () => {
+  withDb((db) => {
+    const c = db.collection('docs', { dimension: 2 });
+    for (let i = 0; i < 10; i++) c.upsert(`doc-${i}`, new Float32Array([i, 1]));
+    // Flush first: a delete only occupies space once the row it shadows is on disk.
+    c.flush();
+    for (let i = 0; i < 7; i++) c.delete(`doc-${i}`);
+    c.flush();
+
+    const before = c.stats();
+    assert.equal(before.liveDocuments, 3);
+    assert.equal(before.totalRows, 10, 'the dead rows are still there');
+    assert.ok(before.deadRatio > 0.6, `deadRatio was ${before.deadRatio}`);
+
+    const clean = db.verify('full');
+    assert.equal(clean.errors, 0);
+    assert.deepEqual(clean.messages, []);
+    assert.ok(clean.warnings > 0, 'seventy percent dead is worth a warning');
+
+    assert.equal(db.compact(), 7);
+
+    const after = c.stats();
+    assert.equal(after.liveDocuments, 3, 'compaction must not lose a document');
+    assert.equal(after.totalRows, 3, 'the dead rows should be gone');
+    assert.equal(after.deadRatio, 0);
+    assert.equal(db.verify('full').errors, 0);
+    // Still searchable afterwards.
+    assert.equal(c.search(new Float32Array([9, 1]), 1)[0].id, 'doc-9');
+  });
+});
+
+test('compaction leaves healthy segments alone unless told otherwise', () => {
+  withDb((db) => {
+    const c = db.collection('docs', { dimension: 2 });
+    for (let i = 0; i < 10; i++) c.upsert(`doc-${i}`, new Float32Array([i, 1]));
+    c.flush();
+    c.delete('doc-0');
+    c.flush();
+    assert.equal(db.compact(), 0, 'ten percent dead is not worth rewriting');
+    assert.equal(db.compact(0), 1, 'unless asked to rewrite everything');
+  });
+});
+
+test('maintenance arguments are validated', () => {
+  withDb((db) => {
+    assert.throws(() => db.compact(2), /between 0 and 1/);
+    assert.throws(() => db.compact(-1), /between 0 and 1/);
+    assert.throws(() => db.verify('nope'), /unknown verify level/);
+  });
+});

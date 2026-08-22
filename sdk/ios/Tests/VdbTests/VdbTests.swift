@@ -296,3 +296,77 @@ final class FilterTests: XCTestCase {
         XCTAssertEqual(try ids(.lessThanOrEqual("category", .int(1))), [])
     }
 }
+
+/// Stats, compaction and verification — the tools an application needs to manage its own
+/// storage. On a phone this matters more than anywhere else: space is scarce, and until now an
+/// app had no way to reclaim what deletes had left behind.
+final class MaintenanceTests: XCTestCase {
+    private var directory: URL!
+
+    override func setUpWithError() throws {
+        directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("vdb-maint-\(UUID().uuidString)")
+    }
+
+    override func tearDownWithError() throws {
+        try? FileManager.default.removeItem(at: directory)
+    }
+
+    func testStatsCompactionAndVerification() throws {
+        let db = try Database(path: directory.path)
+        let docs = try db.collection("docs", dimension: 2)
+        for i in 0..<10 {
+            try docs.upsert("doc-\(i)", vector: [Float(i), 1])
+        }
+        // Flush first: a delete only occupies space once the row it shadows is on disk.
+        try docs.flush()
+        for i in 0..<7 {
+            try docs.delete("doc-\(i)")
+        }
+        try docs.flush()
+
+        let before = try docs.stats()
+        XCTAssertEqual(before.liveDocuments, 3)
+        XCTAssertEqual(before.totalRows, 10, "the dead rows are still there")
+        XCTAssertEqual(before.dimension, 2)
+        XCTAssertGreaterThan(before.deadRatio, 0.6)
+
+        let clean = try db.verify(.full)
+        XCTAssertTrue(clean.isClean)
+        XCTAssertGreaterThan(clean.warnings, 0, "seventy percent dead is worth a warning")
+
+        XCTAssertEqual(try db.compact(), 7)
+
+        let after = try docs.stats()
+        XCTAssertEqual(after.liveDocuments, 3, "compaction must not lose a document")
+        XCTAssertEqual(after.totalRows, 3, "the dead rows should be gone")
+        XCTAssertEqual(after.deadRatio, 0)
+        XCTAssertTrue(try db.verify(.full).isClean)
+
+        // Still searchable afterwards.
+        XCTAssertEqual(try docs.search([9, 1], topK: 1).first?.id, "doc-9")
+        try db.close()
+    }
+
+    func testCompactionLeavesHealthySegmentsAlone() throws {
+        let db = try Database(path: directory.path)
+        let docs = try db.collection("docs", dimension: 2)
+        for i in 0..<10 {
+            try docs.upsert("doc-\(i)", vector: [Float(i), 1])
+        }
+        try docs.flush()
+        try docs.delete("doc-0")
+        try docs.flush()
+
+        XCTAssertEqual(try db.compact(), 0, "ten percent dead is not worth rewriting")
+        XCTAssertEqual(try db.compact(minDeadRatio: 0), 1, "unless asked to rewrite everything")
+        try db.close()
+    }
+
+    func testANonsensicalRatioIsRefusedRatherThanClamped() throws {
+        let db = try Database(path: directory.path)
+        XCTAssertThrowsError(try db.compact(minDeadRatio: 2))
+        XCTAssertThrowsError(try db.compact(minDeadRatio: -1))
+        try db.close()
+    }
+}

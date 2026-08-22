@@ -59,7 +59,10 @@ pub use error::{vdb_error_code, vdb_error_free, vdb_error_message, VdbError};
 
 use std::sync::Arc;
 
-use vdb_core::api::{CollectionSpec, Database, DatabaseConfig, SearchRequest, UpsertOutcome};
+use vdb_core::api::{
+    CollectionSpec, CompactOptions, Database, DatabaseConfig, SearchRequest, UpsertOutcome,
+    VerifyLevel,
+};
 use vdb_core::clock::Clock;
 use vdb_core::document::{DocId, DocumentInput, Include};
 use vdb_core::metadata::{Metadata, Value};
@@ -97,6 +100,11 @@ pub const VDB_ABI_VERSION: u32 = 1;
 const METRIC_COSINE: i32 = 1;
 const METRIC_L2: i32 = 2;
 const METRIC_DOT: i32 = 3;
+
+/// Verification levels, matching `vdb_verify_t`.
+const VERIFY_QUICK: i32 = 1;
+const VERIFY_CHECKSUMS: i32 = 2;
+const VERIFY_FULL: i32 = 3;
 
 /// Durability discriminants, matching `vdb_durability_t`.
 const DURABILITY_FULL: i32 = 1;
@@ -350,6 +358,25 @@ pub unsafe extern "C" fn vdb_collection_count(
     })
 }
 
+/// Fold one collection's buffered writes into a segment.
+///
+/// [`vdb_flush`] does every collection; this does one, which is what an application wants when
+/// it has just finished writing to a single collection and does not want to pay for the others.
+///
+/// # Safety
+/// `collection` must be live.
+#[no_mangle]
+pub unsafe extern "C" fn vdb_collection_flush(
+    collection: *const VdbCollection,
+    err: *mut *mut VdbError,
+) -> i32 {
+    guard(err, || {
+        // SAFETY: the caller guarantees `collection` is live.
+        let c = unsafe { VdbCollection::borrow(collection) }?;
+        c.flush().map_err(Boundary::Db)
+    })
+}
+
 // ---------------------------------------------------------------------------
 // documents
 // ---------------------------------------------------------------------------
@@ -585,6 +612,140 @@ pub unsafe extern "C" fn vdb_results_free(results: *mut VdbResults) {
     }
     // SAFETY: the caller guarantees the handle came from this library and is not reused.
     unsafe { VdbResults::destroy(results) };
+}
+
+// ---------------------------------------------------------------------------
+// maintenance
+// ---------------------------------------------------------------------------
+
+/// Counters for a collection, filled in by [`vdb_collection_stats`].
+///
+/// A plain struct rather than an opaque handle: it is small, fixed, and read once. An opaque
+/// handle would mean an allocation, four accessor calls and a free for six numbers.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct VdbStats {
+    /// Live documents.
+    pub live_documents: u64,
+    /// Rows on disk, tombstones included.
+    pub total_rows: u64,
+    /// Segments on disk.
+    pub segments: u64,
+    /// Documents written but not yet folded into a segment.
+    pub buffered_documents: u64,
+    /// Fraction of rows that are tombstones, 0 to 1.
+    pub dead_ratio: f32,
+    /// Vector dimension.
+    pub dimension: u32,
+}
+
+/// Read a collection's counters.
+///
+/// `dead_ratio` is the number that says whether compaction is worth running: deletes and
+/// overwrites only mark rows dead, and the bytes stay until something reclaims them.
+///
+/// # Safety
+/// `collection` must be live and `out` writable.
+#[no_mangle]
+pub unsafe extern "C" fn vdb_collection_stats(
+    collection: *const VdbCollection,
+    out: *mut VdbStats,
+    err: *mut *mut VdbError,
+) -> i32 {
+    guard(err, || {
+        if out.is_null() {
+            return Err(Boundary::Null);
+        }
+        // SAFETY: the caller guarantees `collection` is live.
+        let c = unsafe { VdbCollection::borrow(collection) }?;
+        let s = c.stats().map_err(Boundary::Db)?;
+        let stats = VdbStats {
+            live_documents: s.live_documents,
+            total_rows: s.total_rows,
+            segments: s.segments as u64,
+            buffered_documents: s.buffered_documents as u64,
+            dead_ratio: s.dead_ratio,
+            dimension: s.dimension,
+        };
+        // SAFETY: `out` was checked non-null above.
+        unsafe { *out = stats };
+        Ok(())
+    })
+}
+
+/// Reclaim the space held by tombstoned rows, across every collection.
+///
+/// Explicit rather than automatic. Rewriting hundreds of megabytes is a decision about when to
+/// spend I/O and battery, and an application knows more about that than the engine does — when
+/// it is plugged in, when the user is not waiting, when the screen is off.
+///
+/// `min_dead_ratio` sets how dead a segment must be before it is worth rewriting; 0.0 rewrites
+/// everything. `out_rows_reclaimed` may be null.
+///
+/// # Safety
+/// `db` must be live.
+#[no_mangle]
+pub unsafe extern "C" fn vdb_compact(
+    db: *const VdbDb,
+    min_dead_ratio: f32,
+    out_rows_reclaimed: *mut u64,
+    err: *mut *mut VdbError,
+) -> i32 {
+    guard(err, || {
+        if !(0.0..=1.0).contains(&min_dead_ratio) {
+            return Err(Boundary::InvalidArgument);
+        }
+        // SAFETY: the caller guarantees `db` is live.
+        let database = unsafe { VdbDb::borrow(db) }?;
+        let options = CompactOptions::default().min_dead_ratio(min_dead_ratio);
+        let report = database.compact(options).map_err(Boundary::Db)?;
+        if !out_rows_reclaimed.is_null() {
+            // SAFETY: the caller guarantees a non-null out-parameter is writable.
+            unsafe { *out_rows_reclaimed = report.rows_reclaimed };
+        }
+        Ok(())
+    })
+}
+
+/// Check the database's integrity.
+///
+/// `level` is `VDB_VERIFY_QUICK` (headers and manifest only), `VDB_VERIFY_CHECKSUMS` (reads
+/// every byte) or `VDB_VERIFY_FULL` (checksums plus cross-file consistency).
+///
+/// Reports rather than repairs: `out_errors` receives the number of problems found, and
+/// `vdb_verify` itself returns `VDB_OK` unless verification could not run at all. Deciding what
+/// to discard is not a choice a library should make on someone's behalf.
+///
+/// # Safety
+/// `db` must be live; the out-parameters may be null.
+#[no_mangle]
+pub unsafe extern "C" fn vdb_verify(
+    db: *const VdbDb,
+    level: i32,
+    out_errors: *mut u64,
+    out_warnings: *mut u64,
+    err: *mut *mut VdbError,
+) -> i32 {
+    guard(err, || {
+        let level = match level {
+            VERIFY_QUICK => VerifyLevel::Quick,
+            VERIFY_CHECKSUMS => VerifyLevel::Checksums,
+            VERIFY_FULL => VerifyLevel::Full,
+            _ => return Err(Boundary::InvalidArgument),
+        };
+        // SAFETY: the caller guarantees `db` is live.
+        let database = unsafe { VdbDb::borrow(db) }?;
+        let report = database.verify(level).map_err(Boundary::Db)?;
+        if !out_errors.is_null() {
+            // SAFETY: the caller guarantees a non-null out-parameter is writable.
+            unsafe { *out_errors = report.errors.len() as u64 };
+        }
+        if !out_warnings.is_null() {
+            // SAFETY: as above.
+            unsafe { *out_warnings = report.warnings.len() as u64 };
+        }
+        Ok(())
+    })
 }
 
 // ---------------------------------------------------------------------------

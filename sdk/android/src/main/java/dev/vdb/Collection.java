@@ -59,6 +59,11 @@ public final class Collection implements AutoCloseable {
     return Native.count(alive());
   }
 
+  /** Counters, including the dead ratio that says whether compaction is worth running. */
+  public Stats stats() {
+    return new Stats(Native.collectionStats(alive()));
+  }
+
   /** Fold buffered writes into a segment. */
   public void flush() {
     Native.flushCollection(alive());

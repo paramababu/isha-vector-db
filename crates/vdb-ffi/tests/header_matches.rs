@@ -113,7 +113,10 @@ fn the_surface_is_the_expected_size() {
     let n = exported().len();
     assert!(n >= 20, "the ABI lost functions: {n}");
     assert!(
-        n <= 40,
+        // Raised from 40 when filters and maintenance landed. Raising it should be a
+        // deliberate act with a reason attached: the tripwire does not stop growth, it
+        // stops growth nobody noticed.
+        n <= 45,
         "the ABI grew to {n} functions; is this still a minimal surface?"
     );
 }
