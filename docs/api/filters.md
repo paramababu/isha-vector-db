@@ -119,12 +119,49 @@ An earlier version of this document asserted that a decode must be cheaper than 
 computation, on grounds anyone would find plausible. Measuring it showed otherwise. The history
 is left here rather than quietly deleted, because the reasoning is the kind that recurs.
 
-Two further improvements are designed for and not built, and both now have a number to beat:
+### Where the time actually goes
 
-- **A field offset table** in the metadata record, so a lookup is a seek rather than a walk. This
-  is what would make filtering genuinely faster than not filtering.
-- **Secondary field indexes**, so a filter over an indexed field never touches metadata at all.
+A selectivity sweep separates the two costs, which move in opposite directions — a filter removes
+distance computations and adds a lookup. At 50,000 documents × 384 dimensions:
+
+| filter | rows scored | rows skipped | p50 |
+|---|---|---|---|
+| none | 50,000 | 0 | 3.30 ms |
+| matches nothing | 0 | 50,000 | 3.03 ms |
+| matches 10% | 5,000 | 45,000 | 3.99 ms |
+| matches everything | 50,000 | 0 | 6.22 ms |
+
+The costs are additive, and near enough equal: **a metadata lookup costs about what a 384-dimension
+SIMD distance costs.** That is why filtering cannot currently be faster than not filtering — you
+pay a lookup for every row you skip.
+
+Walking the sorted keys is a real part of it. Metadata stores keys in order, so a filter naming
+the alphabetically-first field finds it on the first comparison and one naming the last field
+walks past the others:
+
+| filter names | p50 |
+|---|---|
+| the first key of three | 3.85 ms |
+| the last key of three | 5.99 ms |
+
+Two skipped keys cost ~2.1 ms across 50,000 rows, about **22 ns per key walked past**. A document
+with ten metadata fields and a filter on the last of them would spend roughly four times a
+distance computation on the lookup alone.
+
+That measurement decides between the two candidate fixes, which is why it was worth taking
+before building either:
+
+- **A field offset table** in the metadata record turns the walk into a seek. The numbers say
+  this is worth doing, and worth more the more fields a document has. It requires a format
+  version bump, so it belongs before 1.0 freezes the format.
+- **Secondary field indexes** would remove the lookup entirely rather than shortening it, which
+  is the only thing that can make a filtered search *faster* than an unfiltered one.
   `Filter::referenced_fields()` exists to feed that decision.
+
+One incidental observation worth keeping: the filtered timings are far more stable across runs
+than the unfiltered ones (5.98–6.00 ms against 3.30–5.24 ms on the same machine). The scan is
+memory-bandwidth-bound and therefore thermally sensitive; the lookup is branch- and
+compute-bound and is not.
 
 Until then: filter for correctness. Filtering will not currently make a search faster, though it
 no longer makes it slower.

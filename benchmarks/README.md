@@ -78,6 +78,13 @@ Compare ratios across runs and absolutes only within one.
 query. The NEON kernels are **3.6× faster** than the portable reference — measured against the
 baseline committed one step earlier, which is the whole reason that step came first.
 
+**A metadata lookup costs about what a 384-dimension distance costs.** A selectivity sweep
+separates the two — a filter removes distances and adds lookups — and they turn out additive and
+near-equal at ~61 ns each. Walking sorted metadata keys is a measurable part of it: a filter
+naming the last of three fields costs 56% more than one naming the first, about 22 ns per key
+walked past. That number is what decides between a field offset table and a secondary index, and
+it is in [docs/api/filters.md](../docs/api/filters.md#where-the-time-actually-goes).
+
 **Filtering is now free rather than expensive.** A filter passing 10% of documents costs 7.3 ms
 against 6.2 ms unfiltered — roughly break-even, where it was 1.5× *slower* before the metadata
 lookup became lazy. It is still not *faster* than an unfiltered scan despite scoring a tenth as

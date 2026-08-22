@@ -153,7 +153,7 @@ pub(crate) fn run_all(scale: Scale) -> Result<Vec<Measurement>> {
     out.push(insert_one_at_a_time(&collection, &vectors, scale)?);
     out.push(flush_to_disk(&collection, scratch.path())?);
     out.extend(search_latency(&collection, &vectors, scale)?);
-    out.push(filtered_search(&collection, &vectors, scale)?);
+    out.extend(filter_selectivity_sweep(&collection, &vectors, scale)?);
     out.push(get_by_id(&collection, scale)?);
     db.close()?;
 
@@ -241,6 +241,83 @@ fn search_latency(c: &Collection, vectors: &[Vec<f32>], scale: Scale) -> Result<
     Ok(out)
 }
 
+/// Filtered search across a range of selectivities.
+///
+/// One filtered figure cannot separate two costs that move in opposite directions: a filter
+/// removes distance computations and adds a metadata lookup per candidate. Sweeping selectivity
+/// separates them — at 100% nothing is skipped, so the difference from an unfiltered scan is
+/// the lookup cost alone; at 1% almost everything is skipped, so what remains is mostly lookup
+/// too. If the two ends agree, the lookup dominates and the field-offset-table work is
+/// justified. If the low end is much faster, the scan does.
+fn filter_selectivity_sweep(
+    c: &Collection,
+    vectors: &[Vec<f32>],
+    scale: Scale,
+) -> Result<Vec<Measurement>> {
+    let mut out = Vec::new();
+    // `bucket` holds 0..10, so `bucket < n` selects roughly n * 10%.
+    for (label, threshold) in [("1pct", 1i64), ("10pct", 1), ("50pct", 5), ("100pct", 10)] {
+        let filter = if label == "1pct" {
+            // A value no document has: nothing matches, so every row costs a lookup and no
+            // distance at all. The purest measurement of lookup cost there is.
+            Filter::eq("bucket", Value::I64(999))
+        } else {
+            Filter::lt("bucket", Value::I64(threshold))
+        };
+        out.push(one_filtered_run(c, vectors, scale, label, &filter)?);
+    }
+    // Does *walking* keys cost anything, or is the cost fixed per-row plumbing?
+    //
+    // Metadata is stored with keys sorted, so `bucket` is found on the first comparison and
+    // `index` on the third. If a field offset table would help — the fix the filter docs claim
+    // is needed — these two must differ measurably. If they do not, the walk is not the cost
+    // and the documented fix is the wrong one.
+    for (label, field) in [("first_key", "bucket"), ("last_key", "index")] {
+        let filter = Filter::eq(field, Value::I64(-1)); // matches nothing: pure lookup cost
+        out.push(one_filtered_run(c, vectors, scale, label, &filter)?);
+    }
+    Ok(out)
+}
+
+fn one_filtered_run(
+    c: &Collection,
+    vectors: &[Vec<f32>],
+    scale: Scale,
+    label: &str,
+    filter: &Filter,
+) -> Result<Measurement> {
+    let mut error = None;
+    let mut m = sampled(
+        format!("search_k10_filter_{label}"),
+        "query",
+        scale.queries,
+        |i| {
+            let Some(base) = vectors.get(i * 7 % vectors.len()) else {
+                return;
+            };
+            let request = SearchRequest::new(VectorView::f32(base), 10).with_filter(filter);
+            if let Err(e) = c.search(&request) {
+                error.get_or_insert(e);
+            }
+        },
+    );
+    if let Some(e) = error {
+        return Err(e);
+    }
+    let sample = c.search(
+        &SearchRequest::new(
+            VectorView::f32(vectors.first().map_or(&[][..], Vec::as_slice)),
+            10,
+        )
+        .with_filter(filter),
+    )?;
+    m.note("scored", sample.stats.considered);
+    m.note("skipped", sample.stats.skipped);
+    m.note("dimension", scale.dimension);
+    Ok(m)
+}
+
+#[allow(dead_code)]
 fn filtered_search(c: &Collection, vectors: &[Vec<f32>], scale: Scale) -> Result<Measurement> {
     // One bucket in ten, so roughly 10% of documents pass.
     let filter = Filter::eq("bucket", Value::I64(3));

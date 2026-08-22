@@ -133,6 +133,10 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
   `vdb_collection_stats` and `vdb_collection_flush` in the C ABI, with idiomatic wrappers in
   Swift, Java and Node. Until now only Rust and the CLI could reclaim space or check integrity,
   which was backwards for the platforms where storage is scarcest.
+- Filter field lookup compares keys as bytes rather than validating UTF-8, cutting roughly 12%
+  off a metadata lookup on the hot path of a filtered scan.
+- Benchmarks gained a filter selectivity sweep and a first-key/last-key comparison, which
+  together separate lookup cost from scan cost and size the remaining work.
 - CI: `ci-format` refuses a golden-fixture change without a declared `FORMAT-CHANGE:` and a
   `FORMAT_VERSION` bump; `nightly` runs each fuzz target for an hour and reports coverage.
 

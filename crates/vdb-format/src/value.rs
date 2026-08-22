@@ -367,9 +367,17 @@ pub fn find_path(bytes: &[u8], path: &str) -> Result<Option<Value>> {
         let count = bounded_count(r.varint()?, r.remaining() / 2, count_at)?;
 
         let mut found = false;
+        let wanted = segment.as_bytes();
         for _ in 0..count {
-            let key = r.string()?;
-            match key.cmp(segment) {
+            // Compared as bytes, not as `&str`. Reading a key as a string validates UTF-8, and
+            // this loop runs once per candidate row of a filtered scan — the benchmarks put a
+            // whole metadata lookup at about the cost of a 384-dimensional distance, and this
+            // validation was a measurable slice of it. Byte order and code-point order agree
+            // for UTF-8, so the sorted-key early exit is unaffected; and a key that is not
+            // valid UTF-8 simply fails to match a path that is, which is the same answer the
+            // validating version gave, reached without the check.
+            let key = r.blob()?;
+            match key.cmp(wanted) {
                 core::cmp::Ordering::Less => skip_value(&mut r)?,
                 core::cmp::Ordering::Equal => {
                     found = true;
