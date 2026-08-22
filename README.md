@@ -63,7 +63,8 @@ Nothing at or below the public API knows which platform it is on. That is enforc
 | `vdb-storage-os`: the real filesystem backend | Done |
 | Compaction, verification, `vdb` CLI | Done |
 | Benchmark harness and committed baseline | Done |
-| SIMD kernels, then the C ABI | Next |
+| SIMD kernels (NEON, AVX2, simd128) | Done |
+| Freeze the C ABI, then the Node SDK | Next |
 | `vdb-index-flat`, search, filters | Not started |
 | `vdb-storage-os` | Not started |
 | C ABI, SDKs, HNSW, web | Later phases |
@@ -144,15 +145,18 @@ At 50,000 documents × 384 dimensions, on an Apple M-series laptop:
 | workload | result |
 |---|---|
 | insert, one at a time | 35,300/s |
-| search, k=10 | p50 12.5 ms, p99 13.0 ms |
+| search, k=10 | p50 2.6 ms, p99 3.3 ms |
 | get by id | p50 750 ns |
 | cold open | 33.7 ms |
 | storage overhead | 4.6% above the raw vectors |
 
 **These are a reference point on one machine, not a claim about performance in general.** Mobile
-numbers must come from mobile hardware and do not exist yet. The scan is memory-bandwidth-bound
-and the scalar kernel leaves a factor of two to four unused — that is what the SIMD work is for,
-and it now has a number to beat.
+numbers must come from mobile hardware and do not exist yet.
+
+Search uses the SIMD kernels in `vdb-index-flat`, which are 4.9× faster than the portable
+reference in `vdb-core` on this machine. `Database::open` gives you the reference — correct
+everywhere, `unsafe`-free, slower; `Database::open_with_index` takes the accelerated one, which
+is what every shipped SDK will pass.
 
 One finding worth knowing before you rely on it: **metadata filtering currently makes search
 slower, not faster.** The details and the fix are in

@@ -85,6 +85,12 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
   Clustered rather than uniform data, queries drawn from the corpus, documented percentile
   convention, and a refusal to write JSON from a debug build. Measures insert, search, filtered
   search, id lookup, cold open, recovery, compaction, storage amplification and peak memory.
+- **SIMD kernels** in `vdb-index-flat`: NEON, AVX2+FMA with runtime detection, and `simd128`,
+  each differential-tested against the portable reference at every vector length. 4.9× faster
+  search on the benchmark machine. Reached via `Database::open_with_index`, so `vdb-core` keeps
+  `forbid(unsafe_code)` and the layering that lets a build ship only the indexes it needs.
+- `vdb-format` now fails to compile on a big-endian target, with a message explaining what a port
+  would involve — the invariant is enforced rather than documented.
 - CI: `ci-format` refuses a golden-fixture change without a declared `FORMAT-CHANGE:` and a
   `FORMAT_VERSION` bump; `nightly` runs each fuzz target for an hour and reports coverage.
 

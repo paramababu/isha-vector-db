@@ -13,7 +13,7 @@ use crate::api::{CollectionVerify, VerifyLevel};
 use crate::document::{DocId, Document, DocumentInput, Include};
 use crate::error::{ConflictError, NotFoundError, Result, TransactionError};
 use crate::filter::{self, Filter};
-use crate::index::{Budget, LiveSet, RowPredicate, SearchCtx, VectorIndex, VectorSource};
+use crate::index::{Budget, LiveSet, RowPredicate, SearchCtx, VectorSource};
 use crate::metadata::Metadata;
 use crate::persistence::segment::{
     compact_segments, flush_memtable, list_segment_ids, remove_segment, SegmentData,
@@ -524,9 +524,7 @@ impl Collection {
             budget,
         };
 
-        // v1 has one index kind. Selecting between several arrives with the registry in
-        // phase 3, when there is a second implementation to select.
-        let index = crate::index::ExactScan::new();
+        let index = self.db.index.as_ref();
         let mut top = TopK::new(request.top_k).with_min_score(request.min_score);
         index.search(&ctx, &mut top)?;
 

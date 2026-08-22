@@ -55,7 +55,8 @@ Headline figures at 50,000 documents × 384 dimensions:
 |---|---|
 | insert, one at a time | 35,300/s (p50 11.7 µs) |
 | insert, batched 1,000 | 40,400/s |
-| search, k=10 | p50 12.5 ms, p99 13.0 ms |
+| search, k=10 (NEON) | p50 2.6 ms, p99 3.3 ms |
+| search, k=10 (scalar reference) | p50 12.5 ms |
 | search, k=10, 10% filter | p50 18.9 ms — **slower**, see below |
 | get by id | p50 750 ns |
 | cold open | 33.7 ms |
@@ -66,8 +67,13 @@ Headline figures at 50,000 documents × 384 dimensions:
 ## What the baseline says
 
 **The scan is memory-bandwidth-bound, as designed.** 50,000 × 384 dimensions is 76.8 MB per
-query, at 12.5 ms — around 6 GB/s. The scalar kernel is leaving a factor of two to four on the
-table, which is what the SIMD work in `vdb-index-flat` is for, and now has a number to beat.
+query. The scalar reference does it in 12.5 ms (≈6 GB/s); the NEON kernels in `vdb-index-flat`
+do it in 2.6 ms (≈30 GB/s), a **4.9× speedup** — measured against the committed baseline, which
+is the whole reason the baseline was committed first.
+
+Both figures are reported, and both are run every time, because the accelerated kernel is only
+trustworthy while it agrees with the reference. The differential tests check that agreement at
+every vector length; this checks it is still worth having.
 
 **k barely matters.** k=1 and k=100 differ by 1%, because the heap is noise next to reading 76 MB.
 Selection is not where the time goes.

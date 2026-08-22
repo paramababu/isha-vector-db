@@ -83,10 +83,22 @@ impl Drop for Scratch {
     }
 }
 
+/// Open with the accelerated index, which is what every shipped SDK does — so the numbers
+/// describe what a user gets, not what an auditor's default build gets.
 fn open(path: &std::path::Path, durability: Durability) -> Result<Database> {
-    Database::open(
+    Database::open_with_index(
         Arc::new(OsStorage::open(path)?),
         DatabaseConfig::default().durability(durability),
+        Arc::new(ManualClock::default()),
+        Arc::new(vdb_index_flat::FlatIndex::new()),
+    )
+}
+
+/// Open with the core's reference scan, for measuring what the SIMD kernels actually buy.
+fn open_reference(path: &std::path::Path) -> Result<Database> {
+    Database::open(
+        Arc::new(OsStorage::open(path)?),
+        DatabaseConfig::default().durability(Durability::Batch),
         Arc::new(ManualClock::default()),
     )
 }
@@ -145,6 +157,11 @@ pub(crate) fn run_all(scale: Scale) -> Result<Vec<Measurement>> {
     out.push(get_by_id(&collection, scale)?);
     db.close()?;
 
+    out.push(scalar_search_for_comparison(
+        scratch.path(),
+        &vectors,
+        scale,
+    )?);
     out.push(cold_open(scratch.path(), scale)?);
     out.push(storage_footprint(scratch.path(), scale));
 
@@ -161,6 +178,9 @@ pub(crate) fn run_all(scale: Scale) -> Result<Vec<Measurement>> {
         );
         out.push(m);
     }
+    let mut kernel = Measurement::new("kernel_backend", "info");
+    kernel.note("backend", vdb_index_flat::FlatIndex::new().backend().name());
+    out.push(kernel);
     Ok(out)
 }
 
@@ -215,6 +235,9 @@ fn search_latency(c: &Collection, vectors: &[Vec<f32>], scale: Scale) -> Result<
         m.note("dimension", scale.dimension);
         out.push(m);
     }
+    let mut kernel = Measurement::new("kernel_backend", "info");
+    kernel.note("backend", vdb_index_flat::FlatIndex::new().backend().name());
+    out.push(kernel);
     Ok(out)
 }
 
@@ -260,6 +283,34 @@ fn get_by_id(c: &Collection, scale: Scale) -> Result<Measurement> {
     if let Some(e) = error {
         return Err(e);
     }
+    Ok(m)
+}
+
+/// The same search against the core's reference scan, so the SIMD speedup is a measured ratio
+/// rather than a claim.
+fn scalar_search_for_comparison(
+    path: &std::path::Path,
+    vectors: &[Vec<f32>],
+    scale: Scale,
+) -> Result<Measurement> {
+    let db = open_reference(path)?;
+    let c = db.open_collection("bench")?;
+    let mut error = None;
+    let mut m = sampled("search_k10_scalar_reference", "query", scale.queries, |i| {
+        let Some(base) = vectors.get(i * 7 % vectors.len()) else {
+            return;
+        };
+        let query: Vec<f32> = base.iter().map(|x| x * 1.01).collect();
+        if let Err(e) = c.search(&SearchRequest::new(VectorView::f32(&query), 10)) {
+            error.get_or_insert(e);
+        }
+    });
+    if let Some(e) = error {
+        return Err(e);
+    }
+    m.note("kernel", "scalar (vdb-core ExactScan)");
+    m.note("dimension", scale.dimension);
+    db.close()?;
     Ok(m)
 }
 

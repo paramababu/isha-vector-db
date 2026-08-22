@@ -19,7 +19,11 @@
 //! the scan stops fitting in the latency budget — and even then, this remains the ground truth
 //! its recall is measured against.
 
-#![forbid(unsafe_code)]
+// `unsafe` is permitted here and nowhere near the core, per
+// docs/architecture/02-technology.md §2.4: the SIMD intrinsics and the byte-to-float
+// reinterpretation need it. Every block carries a SAFETY comment, and every kernel is
+// differential-tested against the scalar reference in `vdb-core`.
+#![deny(unsafe_op_in_unsafe_fn)]
 #![cfg_attr(
     test,
     allow(
@@ -31,21 +35,71 @@
 )]
 #![warn(missing_docs)]
 
-use vdb_core::error::Result;
-use vdb_core::index::{ExactScan, IndexKind, IndexStats, SearchCtx, VectorIndex};
-use vdb_core::search::TopK;
+pub mod kernels;
 
-/// An exact, scan-based index.
+use vdb_core::error::Result;
+use vdb_core::index::{IndexKind, IndexStats, SearchCtx, VectorIndex};
+use vdb_core::search::{Metric, TopK};
+
+pub use kernels::Backend;
+
+/// Candidates examined between budget checks.
+///
+/// Small enough that a cancelled search stops promptly, large enough to keep the atomic out of
+/// the inner loop.
+const BUDGET_STRIDE: u64 = 1024;
+
+/// An exact, scan-based index using the fastest kernels this machine has.
 #[derive(Debug, Default, Clone, Copy)]
-pub struct FlatIndex {
-    reference: ExactScan,
-}
+pub struct FlatIndex;
 
 impl FlatIndex {
     /// Create one. It holds no state.
     pub const fn new() -> Self {
+        Self
+    }
+
+    /// Which kernel implementation will run here.
+    pub fn backend(&self) -> Backend {
+        kernels::backend()
+    }
+}
+
+/// Scores a query against stored rows, with the query's norm precomputed.
+///
+/// A local counterpart to `vdb_core::search::Scorer`, differing only in which kernels it calls.
+/// The duplication is deliberate and narrow: the *contract* — what each metric returns, and that
+/// higher is always better — stays defined once in the core, and the differential tests compare
+/// this implementation against that one directly.
+struct FastScorer<'a> {
+    metric: Metric,
+    query: &'a [f32],
+    query_inv_norm: f32,
+}
+
+impl<'a> FastScorer<'a> {
+    fn new(metric: Metric, query: &'a [f32]) -> Self {
+        let norm = kernels::dot_f32(query, query).sqrt();
+        let query_inv_norm = if norm > 0.0 && norm.is_finite() {
+            1.0 / norm
+        } else {
+            0.0
+        };
         Self {
-            reference: ExactScan::new(),
+            metric,
+            query,
+            query_inv_norm,
+        }
+    }
+
+    fn score(&self, row: &[u8], row_inv_norm: f32) -> f32 {
+        match self.metric {
+            Metric::Cosine => kernels::dot(self.query, row) * self.query_inv_norm * row_inv_norm,
+            Metric::Dot => kernels::dot(self.query, row),
+            Metric::L2 => -kernels::l2_squared(self.query, row),
+            // `Metric` is #[non_exhaustive]; a metric this build does not know scores nothing
+            // rather than silently ranking by the wrong function.
+            _ => f32::NEG_INFINITY,
         }
     }
 }
@@ -60,9 +114,28 @@ impl VectorIndex for FlatIndex {
     }
 
     fn search(&self, ctx: &SearchCtx<'_>, out: &mut TopK) -> Result<()> {
-        // Delegated until the accelerated kernels land. Keeping one implementation means the
-        // fast path cannot silently diverge from the baseline before it even exists.
-        self.reference.search(ctx, out)
+        if ctx.top_k == 0 {
+            return Ok(());
+        }
+        let scorer = FastScorer::new(ctx.metric, ctx.query);
+        let mut since_check = 0u64;
+
+        ctx.source.for_each(&mut |row, bytes, row_inv_norm| {
+            // Dead and filtered-out rows are skipped before scoring: the distance is the
+            // expensive part, and there is no reason to pay it for a row that cannot be returned.
+            if !ctx.admits(row)? {
+                return Ok(());
+            }
+            out.offer(row, scorer.score(bytes, row_inv_norm));
+
+            since_check += 1;
+            if since_check >= BUDGET_STRIDE {
+                ctx.budget.charge(since_check)?;
+                since_check = 0;
+            }
+            Ok(())
+        })?;
+        ctx.budget.charge(since_check)
     }
 
     fn stats(&self) -> IndexStats {
@@ -477,5 +550,60 @@ mod tests {
         assert_eq!(index.kind().name(), "flat");
         // It holds no rows of its own, which is the point: nothing to keep in sync.
         assert_eq!(index.stats().memory_bytes, 0);
+    }
+
+    /// The whole justification for this crate: it must produce exactly what the reference
+    /// produces, on the same data, for every metric. If the accelerated index and the reference
+    /// ever disagree about a ranking, the acceleration is worthless.
+    #[test]
+    fn the_accelerated_index_ranks_identically_to_the_reference() {
+        use vdb_core::index::ExactScan;
+
+        let mut seed = 0x1234_5678_9abc_def0u64;
+        let mut next = || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            ((seed >> 40) as f32 / (1u32 << 24) as f32) * 2.0 - 1.0
+        };
+        // A dimension that is not a multiple of any vector width, so the tail path runs.
+        let dim = 387usize;
+        let vectors: Vec<Vec<f32>> = (0..300)
+            .map(|_| (0..dim).map(|_| next()).collect())
+            .collect();
+        let refs: Vec<&[f32]> = vectors.iter().map(Vec::as_slice).collect();
+        let source = Rows::new(dim as u32, &refs);
+        let query: Vec<f32> = (0..dim).map(|_| next()).collect();
+
+        for metric in Metric::ALL {
+            let budget = Budget::unlimited();
+            let ctx = SearchCtx {
+                query: &query,
+                top_k: 25,
+                metric,
+                source: &source,
+                live: &AllLive,
+                filter: None,
+                min_score: None,
+                params: SearchParams::default(),
+                budget: &budget,
+            };
+
+            let mut fast = TopK::new(25);
+            FlatIndex::new().search(&ctx, &mut fast).unwrap();
+            let mut reference = TopK::new(25);
+            ExactScan::new().search(&ctx, &mut reference).unwrap();
+
+            let fast: Vec<u32> = fast.into_sorted().iter().map(|c| c.row.row()).collect();
+            let reference: Vec<u32> = reference
+                .into_sorted()
+                .iter()
+                .map(|c| c.row.row())
+                .collect();
+            assert_eq!(
+                fast, reference,
+                "{metric:?}: accelerated ranking differs from reference"
+            );
+        }
     }
 }

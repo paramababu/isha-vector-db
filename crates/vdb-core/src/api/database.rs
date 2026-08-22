@@ -13,6 +13,7 @@ use crate::api::{
 };
 use crate::clock::Clock;
 use crate::error::{ConflictError, CorruptionError, LifecycleError, NotFoundError, Result};
+use crate::index::VectorIndex;
 use crate::persistence::segment::{read_catalog, write_catalog};
 use crate::persistence::{layout, ManifestStore};
 use crate::storage::{FileLock, Storage};
@@ -21,6 +22,8 @@ use crate::storage::{FileLock, Storage};
 /// there is no reference cycle to leak.
 #[derive(Debug)]
 pub(crate) struct DbInner {
+    /// The index every collection searches with.
+    pub(crate) index: Arc<dyn VectorIndex>,
     pub(crate) storage: Arc<dyn Storage>,
     pub(crate) clock: Arc<dyn Clock>,
     pub(crate) config: DatabaseConfig,
@@ -99,6 +102,36 @@ impl Database {
         config: DatabaseConfig,
         clock: Arc<dyn Clock>,
     ) -> Result<Self> {
+        Self::open_with_index(
+            storage,
+            config,
+            clock,
+            Arc::new(crate::index::ExactScan::new()),
+        )
+    }
+
+    /// Open with a specific index implementation.
+    ///
+    /// `vdb-core` cannot depend on an index crate — that inversion is what lets a mobile build
+    /// ship only the indexes it needs, and it is why the core can forbid `unsafe` at all. So the
+    /// accelerated scan in `vdb-index-flat`, whose SIMD kernels need `unsafe`, arrives this way:
+    ///
+    /// ```ignore
+    /// Database::open_with_index(storage, config, clock, Arc::new(vdb_index_flat::FlatIndex::new()))
+    /// ```
+    ///
+    /// [`Database::open`] uses the reference scan in the core, which is correct everywhere and
+    /// slower. Every shipped SDK passes the accelerated one; an embedder auditing the core in
+    /// isolation gets the safe one by default.
+    ///
+    /// # Errors
+    /// As [`Database::open`].
+    pub fn open_with_index(
+        storage: Arc<dyn Storage>,
+        config: DatabaseConfig,
+        clock: Arc<dyn Clock>,
+        index: Arc<dyn VectorIndex>,
+    ) -> Result<Self> {
         config.validate()?;
 
         // Read-only handles take no lock, so a second process can inspect a database while an
@@ -149,6 +182,7 @@ impl Database {
         };
 
         let inner = Arc::new(DbInner {
+            index,
             storage: Arc::clone(&storage),
             clock: Arc::clone(&clock),
             config,

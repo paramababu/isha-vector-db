@@ -68,6 +68,18 @@ pub use segment::{
 pub use value::{Value, MAX_VALUE_DEPTH};
 pub use wal::{WalFrame, WalOp, WalScan, WalTail};
 
+// The format is little-endian throughout, and the index crate reads stored vectors by
+// reinterpreting bytes as `f32` in native order — which is only correct on a little-endian
+// target. Every platform this project supports is little-endian, and §1.4 records that as an
+// explicit non-goal rather than an oversight. Making it a build failure means a future port
+// meets a clear message instead of silently wrong distances.
+#[cfg(target_endian = "big")]
+compile_error!(
+    "vdb's on-disk format is little-endian only (see docs/architecture/01-scope.md §1.4). \
+     Porting to a big-endian target requires byte-swapping every integer and float in \
+     vdb-format, and reworking how vdb-index-flat reads stored vectors."
+);
+
 /// The format version this build writes.
 pub const FORMAT_VERSION: u16 = 1;
 
