@@ -105,6 +105,11 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
   declarations that are the canonical shape every other JavaScript SDK will mirror. Supports
   `using` for scope-based closing. Tested on Node 18 through 22 from one binary, which is the
   claim N-API exists to make.
+- **Android SDK**: a JNI shim and a Java API (`Vdb`, `Database`, `Collection`), both
+  `AutoCloseable`. Cross-compiles to arm64-v8a, armeabi-v7a and x86_64, linked for 16 KB pages.
+  The JNI boundary is tested on a desktop JVM, so the loop is seconds rather than an emulator.
+- CI: `ci-android` runs the Java suite on Linux and macOS, cross-compiles every ABI, and checks
+  both the page alignment and the per-ABI size budget.
 - CI: `ci-format` refuses a golden-fixture change without a declared `FORMAT-CHANGE:` and a
   `FORMAT_VERSION` bump; `nightly` runs each fuzz target for an hour and reports coverage.
 

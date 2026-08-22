@@ -17,6 +17,23 @@
 //! tool left open — and it is not a security boundary. Some network filesystems implement
 //! `flock` as a no-op, so a database on an NFS mount may not be protected at all; that is a
 //! property of the mount, and is documented rather than papered over.
+//!
+//! # Forking while the database is open
+//!
+//! An `flock` lock belongs to the *open file description*, and `fork` gives the child a copy of
+//! every one of them. So a child forked while a database is open inherits the lock, and the
+//! lock is not released until the parent has dropped it **and** every inherited copy is closed.
+//!
+//! Rust opens files `O_CLOEXEC`, so the descriptor closes as soon as the child `exec`s — which
+//! covers the ordinary `spawn a program` case. What it does not cover is a child that forks and
+//! never execs, or the brief window between the two. An application that closes its database
+//! and immediately reopens it while a subprocess is starting can therefore see a spurious
+//! "already open".
+//!
+//! This is a property of `flock` rather than something to work around: the alternatives — a lock
+//! file, or `fcntl` locks, which are released by closing *any* descriptor for the file and so
+//! break far more surprisingly — are worse. It is recorded here because SDK authors will meet
+//! it: Node spawns child processes, and so does anything that shells out.
 
 use std::fs::OpenOptions;
 use std::path::Path;

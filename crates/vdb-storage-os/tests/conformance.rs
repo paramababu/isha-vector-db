@@ -87,49 +87,51 @@ fn declared_capabilities_match_the_platform() {
     );
 }
 
-/// The reason this backend uses `flock` rather than a lock file: a process that dies must not
-/// leave its database permanently unopenable.
+/// Locking: exclusive while held, released on drop, and visible to other processes.
+///
+/// One test rather than three, and deliberately so. An earlier version split them, and the
+/// cross-process case — which spawns a child — intermittently broke the release case running
+/// concurrently beside it. The cause is not a test artefact but a real property of `flock`: a
+/// forked child inherits the parent's open file descriptions, so a lock the parent has dropped
+/// stays held until every inherited copy is closed too. Rust opens files `O_CLOEXEC`, which
+/// closes them at `exec`, but the window between `fork` and `exec` is enough. It is documented
+/// in `lock.rs` for SDK authors, whose runtimes spawn subprocesses; here the fix is simply not
+/// to run the two concurrently.
 #[cfg(unix)]
 #[test]
-fn a_lock_is_released_when_its_guard_is_dropped() {
+fn locking_is_exclusive_released_on_drop_and_visible_across_processes() {
+    use std::process::Command;
+
     let dir = TempDir::new("lock");
     let s = OsStorage::open(dir.path()).unwrap();
 
+    // Exclusive while held.
     let lock = s.try_lock(&p("LOCK")).unwrap();
     assert!(lock.holder().contains("pid"));
     assert!(
         s.try_lock(&p("LOCK")).is_err(),
         "the lock should be exclusive"
     );
+
+    // Released on drop — the reason this backend uses `flock` rather than a lock file. A file
+    // outlives a crash, so an application killed by the OS could never reopen its own database.
     drop(lock);
-    s.try_lock(&p("LOCK"))
+    let lock = s
+        .try_lock(&p("LOCK"))
         .expect("the lock should be available again");
-}
+    drop(lock);
 
-/// A lock taken by a *different process* must be visible to this one — the case a lock file
-/// gets right by accident and `flock` gets right on purpose.
-#[cfg(unix)]
-#[test]
-fn a_lock_is_exclusive_across_processes() {
-    use std::process::Command;
-
-    let dir = TempDir::new("lock-cross");
-    let s = OsStorage::open(dir.path()).unwrap();
+    // Visible to another process. `flock(1)` is absent on stock macOS, so this half skips
+    // rather than failing; CI's Linux runner exercises it.
     let lock_path = dir.path().join("LOCK");
-    std::fs::write(&lock_path, b"").unwrap();
-
-    // A short-lived child that takes the lock and holds it while we try.
     let script = format!(
         "exec 9<>{}; flock -n 9 || exit 3; sleep 1",
         shell_quote(&lock_path.to_string_lossy())
     );
-    let mut child = match Command::new("sh").arg("-c").arg(&script).spawn() {
-        Ok(c) => c,
-        // `flock(1)` is not on macOS by default; skip rather than fail on a missing tool.
-        Err(_) => return,
+    let Ok(mut child) = Command::new("sh").arg("-c").arg(&script).spawn() else {
+        return;
     };
     std::thread::sleep(std::time::Duration::from_millis(150));
-
     let ours = s.try_lock(&p("LOCK"));
     let status = child.wait().unwrap();
     if status.code() == Some(3) || status.code() == Some(127) {

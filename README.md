@@ -66,7 +66,8 @@ Nothing at or below the public API knows which platform it is on. That is enforc
 | SIMD kernels (NEON, AVX2, simd128) | Done |
 | C ABI (`vdb.h`), frozen and guarded | Done |
 | Node SDK (`@vdb/node`) | Done |
-| Mobile SDKs: Android, iOS, Flutter, React Native | Next |
+| Android SDK (JNI + Java API) | Done |
+| iOS, Flutter, React Native | Next |
 | `vdb-index-flat`, search, filters | Not started |
 | `vdb-storage-os` | Not started |
 | C ABI, SDKs, HNSW, web | Later phases |
@@ -142,6 +143,26 @@ const hits = docs.search(query, 10);   // [{ id, score, distance }]
 
 Synchronous, because the engine is — run a large search in a worker if it would block your event
 loop. `using` closes the database even when an exception unwinds past your cleanup.
+
+## Android
+
+```bash
+./scripts/test-java.sh      # JNI + Java API on a desktop JVM, no device needed
+./scripts/build-android.sh  # arm64-v8a, armeabi-v7a, x86_64 into sdk/android/src/main/jniLibs
+```
+
+```java
+try (Database db = Vdb.open(context.getNoBackupFilesDir() + "/vectors");
+     Collection docs = db.collection("docs", 384, Vdb.Metric.COSINE)) {
+    docs.upsert("a", embedding);
+    for (Collection.Hit hit : docs.search(query, 10)) {
+        Log.d("vdb", hit.id() + " " + hit.score());
+    }
+}
+```
+
+The API is Java, so it is usable from Kotlin unchanged; a Kotlin coroutine layer comes next.
+Libraries are linked for 16 KB pages, which Android 15 requires on some devices.
 
 ## The `vdb` tool
 

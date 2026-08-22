@@ -111,9 +111,8 @@ pub(crate) unsafe fn l2_squared_avx2(a: &[f32], b: &[f32]) -> f32 {
 /// The caller must have verified AVX2. Operates on a register value; no memory is touched.
 #[target_feature(enable = "avx2")]
 unsafe fn horizontal(v: __m256) -> f32 {
-    // SAFETY: the preconditions in this function's doc comment hold for
-    // every call; the per-statement reasoning is in the comments below.
-    unsafe {
+    // `target_feature` already makes these calls safe within the function body; no block needed.
+    {
         // Fold the upper 128 bits onto the lower, then fold within.
         let lo = _mm256_castps256_ps128(v);
         let hi = _mm256_extractf128_ps(v, 1);

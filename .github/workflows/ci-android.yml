@@ -1,0 +1,64 @@
+name: ci-android
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  jni-on-a-desktop-jvm:
+    # The JNI boundary is the part most likely to be wrong and needs no device to exercise.
+    # Running it here turns a five-minute emulator loop into a five-second one.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: Swatinem/rust-cache@v2
+      - run: ./scripts/test-java.sh
+
+  cross-compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: nttld/setup-ndk@v1
+        id: ndk
+        with:
+          ndk-version: r27
+      - uses: Swatinem/rust-cache@v2
+      - name: Build every ABI
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: ./scripts/build-android.sh
+      - name: Every ABI is linked for 16 KB pages
+        # Android 15 runs on devices with 16 KB memory pages, and a library linked for 4 KB will
+        # not load there at all — a failure discovered by a one-star review rather than a test.
+        run: |
+          for so in sdk/android/src/main/jniLibs/*/libvdb_jni.so; do
+            align=$(readelf -lW "$so" | awk '/LOAD/ {print $NF; exit}')
+            echo "$so: $align"
+            if [[ "$align" != "0x4000" && "$align" != "0x10000" ]]; then
+              echo "FAIL: $so is not linked for 16 KB pages (got $align)"
+              exit 1
+            fi
+          done
+      - name: Size budget per ABI
+        run: |
+          for so in sdk/android/src/main/jniLibs/*/libvdb_jni.so; do
+            bytes=$(stat -c%s "$so")
+            echo "$so: $bytes bytes"
+            if [[ $bytes -gt $((1500 * 1024)) ]]; then
+              echo "FAIL: over the 1.5 MB budget"
+              exit 1
+            fi
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jniLibs
+          path: sdk/android/src/main/jniLibs/

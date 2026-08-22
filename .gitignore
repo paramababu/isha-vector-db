@@ -9,3 +9,6 @@ firebase-debug.log
 
 # The Node addon is a build artifact.
 sdk/node/vdb.node
+
+# Android build artifacts.
+sdk/android/src/main/jniLibs/
