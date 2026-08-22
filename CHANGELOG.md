@@ -53,6 +53,14 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
   that equivalence rather than assuming it. Compaction renumbers rows and correctly forces a
   rebuild.
 
+  **Two concurrency defects were found by testing this**, having survived three commits of
+  reasoning about the locking. A search could return results silently missing the newest
+  documents, because `prepare` releases the lock before `search` takes it again and a concurrent
+  writer can swap the graph in between; `search` now verifies the graph covers the source and
+  falls back to the exact scan if not. And a build finishing for N rows could overwrite a graph
+  another thread had already extended to N+5, since the guard asked only whether the existing
+  graph was valid for N — which the newer one also fails.
+
   `VectorIndex::prepare` takes an `IndexSnapshots` — `load` and `store` — implemented by the
   engine over storage. **A snapshot is a cache, not data**, which is what let this ship without an
   on-disk format bump, without a migration, and without crash protection: anything stale,
