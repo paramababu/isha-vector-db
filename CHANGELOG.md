@@ -110,6 +110,11 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
   The JNI boundary is tested on a desktop JVM, so the loop is seconds rather than an emulator.
 - CI: `ci-android` runs the Java suite on Linux and macOS, cross-compiles every ABI, and checks
   both the page alignment and the per-ABI size budget.
+- **iOS/macOS SDK**: a Swift package over the C ABI with no Objective-C layer, plus
+  `build-xcframework.sh` producing device, simulator and macOS slices as a static library.
+  Tested on macOS rather than in a simulator, so the loop is under a second.
+- `measure-ios-size.sh` reports what linking the engine actually adds to an application — 662 KB
+  dead-stripped — rather than the misleading size of the static archive.
 - CI: `ci-format` refuses a golden-fixture change without a declared `FORMAT-CHANGE:` and a
   `FORMAT_VERSION` bump; `nightly` runs each fuzz target for an hour and reports coverage.
 

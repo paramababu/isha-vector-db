@@ -1,0 +1,7 @@
+// Swift imports the C ABI directly through this map. No Objective-C layer: Swift's C interop is
+// good enough that one would be a pointless hop, and an ObjC facade can be added later if
+// someone needs to call this from an ObjC codebase.
+module CVdb {
+    header "vdb.h"
+    export *
+}

@@ -12,3 +12,7 @@ sdk/node/vdb.node
 
 # Android build artifacts.
 sdk/android/src/main/jniLibs/
+
+# iOS build artifacts.
+target/xcframework/
+sdk/ios/.build/

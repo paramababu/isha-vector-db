@@ -67,7 +67,8 @@ Nothing at or below the public API knows which platform it is on. That is enforc
 | C ABI (`vdb.h`), frozen and guarded | Done |
 | Node SDK (`@vdb/node`) | Done |
 | Android SDK (JNI + Java API) | Done |
-| iOS, Flutter, React Native | Next |
+| iOS SDK (Swift + XCFramework) | Done |
+| Flutter, React Native, Web | Next |
 | `vdb-index-flat`, search, filters | Not started |
 | `vdb-storage-os` | Not started |
 | C ABI, SDKs, HNSW, web | Later phases |
@@ -163,6 +164,29 @@ try (Database db = Vdb.open(context.getNoBackupFilesDir() + "/vectors");
 
 The API is Java, so it is usable from Kotlin unchanged; a Kotlin coroutine layer comes next.
 Libraries are linked for 16 KB pages, which Android 15 requires on some devices.
+
+## iOS and macOS
+
+```bash
+./scripts/test-swift.sh          # Swift API on macOS, no simulator needed
+./scripts/build-xcframework.sh   # device + simulator + macOS in one artifact
+./scripts/measure-ios-size.sh    # what linking it adds to an app
+```
+
+```swift
+let db = try Database(path: url.path)
+let docs = try db.collection("docs", dimension: 384, metric: .cosine)
+
+try docs.upsert("a", vector: embedding)
+for hit in try docs.search(query, topK: 10) {
+    print(hit.id, hit.score)
+}
+try db.close()
+```
+
+Static, not dynamic — a dynamic framework costs dyld time at launch that an embedded database has
+no business spending. Linking it adds **662 KB** to an application with dead-stripping, which is
+what Xcode does for release builds.
 
 ## The `vdb` tool
 

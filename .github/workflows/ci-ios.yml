@@ -1,0 +1,52 @@
+name: ci-ios
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  swift-on-macos:
+    # The Swift API needs no simulator to exercise. What genuinely needs a device — Data
+    # Protection while the screen is locked, the app sandbox, jetsam under a large scan — belongs
+    # in a separate, rarer suite; none of it is about whether this API works.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: ./scripts/test-swift.sh
+
+  xcframework:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: ./scripts/build-xcframework.sh
+      - name: Every expected slice is present
+        run: |
+          for slice in ios-arm64 ios-arm64_x86_64-simulator macos-arm64; do
+            test -f "target/xcframework/Vdb.xcframework/$slice/libvdb_ffi.a" \
+              || { echo "FAIL: missing slice $slice"; exit 1; }
+            echo "ok: $slice"
+          done
+      - name: What the engine adds to an application stays under budget
+        run: ./scripts/measure-ios-size.sh aarch64-apple-darwin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Vdb.xcframework
+          path: target/xcframework/Vdb.xcframework
+
+  simulator:
+    # The one thing only a simulator proves: that a device-targeted build actually loads and
+    # runs, rather than merely linking.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: rustup target add aarch64-apple-ios-sim
+      - run: cargo build --release -p vdb-ffi --target aarch64-apple-ios-sim
+      - name: Build the Swift package for the simulator
+        run: |
+          xcodebuild -scheme Vdb -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath /tmp/dd build 2>&1 | tail -5
+        working-directory: sdk/ios
