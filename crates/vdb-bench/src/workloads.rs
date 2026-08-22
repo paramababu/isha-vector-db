@@ -203,6 +203,128 @@ fn wide_metadata_probe(scale: Scale, vectors: &[Vec<f32>]) -> Result<Vec<Measure
     Ok(out)
 }
 
+/// Flat scan against the graph index: latency, and the recall that latency buys.
+///
+/// The comparison only means something with both numbers. A graph index that is ten times faster
+/// at 60% recall is not ten times better, and reporting the speed alone would be the kind of
+/// benchmark this project exists not to publish.
+fn hnsw_against_flat(scale: Scale, vectors: &[Vec<f32>]) -> Result<Vec<Measurement>> {
+    let mut out = Vec::new();
+    let flat_dir = Scratch::new("cmp-flat");
+    let hnsw_dir = Scratch::new("cmp-hnsw");
+
+    let mut truth: Vec<Vec<vdb_core::document::DocId>> = Vec::new();
+    let mut approx: Vec<Vec<vdb_core::document::DocId>> = Vec::new();
+
+    for (label, dir, use_hnsw) in [
+        ("flat", flat_dir.path(), false),
+        ("hnsw", hnsw_dir.path(), true),
+    ] {
+        let storage = Arc::new(OsStorage::open(dir.to_str().unwrap_or("."))?);
+        let clock = Arc::new(ManualClock::new(1_700_000_000_000));
+        let config = DatabaseConfig::default().durability(Durability::Batch);
+        let db = if use_hnsw {
+            Database::open_with_index(
+                storage,
+                config,
+                clock,
+                Arc::new(vdb_index_hnsw::HnswIndex::new()),
+            )?
+        } else {
+            Database::open_with_index(
+                storage,
+                config,
+                clock,
+                Arc::new(vdb_index_flat::FlatIndex::new()),
+            )?
+        };
+        let c = db.create_collection(CollectionSpec::new(
+            "bench",
+            scale.dimension,
+            Metric::Cosine,
+        ))?;
+        for chunk in (0..vectors.len()).collect::<Vec<_>>().chunks(1000) {
+            let mut batch = WriteBatch::with_capacity(chunk.len());
+            for &i in chunk {
+                let Some(v) = vectors.get(i) else { continue };
+                batch.upsert(DocumentInput::new(
+                    format!("doc-{i:07}"),
+                    VectorView::f32(v),
+                ));
+            }
+            c.write_batch(batch)?;
+        }
+        c.flush()?;
+
+        // Building the graph is a real cost and is measured separately, not hidden inside the
+        // first query's latency.
+        if use_hnsw {
+            let (mut m, r) = timed("hnsw_build", "graph", 1, || {
+                c.search(&SearchRequest::new(
+                    VectorView::f32(vectors.first().map_or(&[][..], Vec::as_slice)),
+                    1,
+                ))
+            });
+            r?;
+            m.note("documents", scale.documents as u64);
+            m.note("dimension", scale.dimension);
+            out.push(m);
+        }
+
+        let mut error = None;
+        let mut m = sampled(format!("search_k10_{label}"), "query", scale.queries, |i| {
+            let Some(base) = vectors.get(i * 7 % vectors.len()) else {
+                return;
+            };
+            if let Err(e) = c.search(&SearchRequest::new(VectorView::f32(base), 10)) {
+                error.get_or_insert(e);
+            }
+        });
+        if let Some(e) = error {
+            return Err(e);
+        }
+        m.note("dimension", scale.dimension);
+        m.note("index", label);
+        out.push(m);
+
+        // Collect answers for the recall comparison, from queries that are not corpus members.
+        let mut answers = Vec::new();
+        for i in 0..50usize {
+            let Some(base) = vectors.get(i * 37 % vectors.len()) else {
+                continue;
+            };
+            let query: Vec<f32> = base.iter().map(|x| x * 0.9 + 0.05).collect();
+            let hits = c.search(&SearchRequest::new(VectorView::f32(&query), 10))?;
+            answers.push(hits.hits.iter().map(|h| h.id.clone()).collect());
+        }
+        if use_hnsw {
+            approx = answers;
+        } else {
+            truth = answers;
+        }
+        db.close()?;
+    }
+
+    let mut overlap = 0usize;
+    let mut total = 0usize;
+    for (t, a) in truth.iter().zip(approx.iter()) {
+        overlap += a.iter().filter(|id| t.contains(id)).count();
+        total += t.len();
+    }
+    let mut recall = Measurement::new("hnsw_recall_at_10", "ratio");
+    recall.count = (overlap * 1000).checked_div(total).unwrap_or(0) as u64;
+    recall.note(
+        "scale",
+        "per mille against the flat scan on the same corpus",
+    );
+    recall.note(
+        "ef_search",
+        vdb_index_hnsw::HnswParams::default().ef_search as u64,
+    );
+    out.push(recall);
+    Ok(out)
+}
+
 /// Run everything and return the measurements.
 pub(crate) fn run_all(scale: Scale) -> Result<Vec<Measurement>> {
     let mut out = Vec::new();
@@ -235,6 +357,7 @@ pub(crate) fn run_all(scale: Scale) -> Result<Vec<Measurement>> {
     out.push(batch_insert(scale, &vectors)?);
     out.push(recovery_after_unclean_shutdown(scale, &vectors)?);
     out.push(compaction(scale, &vectors)?);
+    out.extend(hnsw_against_flat(scale, &vectors)?);
 
     if let Some(rss) = peak_rss_bytes() {
         let mut m = Measurement::new("peak_memory", "bytes");

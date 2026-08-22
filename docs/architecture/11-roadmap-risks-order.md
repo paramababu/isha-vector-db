@@ -8,7 +8,7 @@
 | **1** | 0.1 | Core engine: CRUD, batch, flat index, 3 metrics, filters, WAL+manifest+segments, recovery, memory+os storage, CLI, full test suite, benchmarks | All §8.2 cases pass; fault-injection sweep clean; benchmark baseline committed |
 | **1.5** | 0.2 | C ABI frozen; `vdb.h` v1; compaction; `verify`/`repair`; Node SDK | ABI conformance tests pass; Node SDK e2e green on 4 platforms |
 | **2** | 0.3 | React Native, Flutter, Android, iOS SDKs; parity tests; per-platform examples and docs | Every SDK passes the shared parity suite on a real device |
-| **3** | 0.4 | HNSW; index selection guidance; recall gates; on-disk id table for large collections | Recall@10 ≥ 0.95 at documented params; build time benchmarked |
+| **3** | 0.4 | HNSW **done** ([ADR-0015](../adr/0015-hnsw-index.md)); index selection guidance; recall gates **done**; on-disk id table for large collections | Recall@10 ≥ 0.95 at documented params — **met** (0.974 at 50k x 384, 0.992 at 10k x 128, ef 64); build time benchmarked — **met** (95s at 50k x 384) |
 | **4** | 0.5 | Web/WASM SDK (OPFS + IndexedDB fallback); encryption codec; scalar quantization | Web e2e in 3 browsers; encryption round-trip + key-rotation tests |
 | **5** | 1.0 | API freeze; stability commitment; format frozen with a migration path proven by an actual v1→v2 migration — **done**, see [ADR-0014](../adr/0014-metadata-offset-table.md) | Three consecutive releases with no breaking changes; production users |
 | **Later** | 1.x | IVF/PQ, hybrid BM25 + fusion, secondary metadata indexes, interactive transactions, multi-vector documents, sparse vectors, Python/Go/C# bindings | — |

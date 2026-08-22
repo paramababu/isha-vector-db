@@ -28,6 +28,8 @@ use crate::search::{Metric, TopK};
 pub enum IndexKind {
     /// Exact brute-force scan.
     Flat,
+    /// Hierarchical navigable small world graph: approximate, and much faster at scale.
+    Hnsw,
 }
 
 impl IndexKind {
@@ -35,6 +37,7 @@ impl IndexKind {
     pub const fn name(self) -> &'static str {
         match self {
             Self::Flat => "flat",
+            Self::Hnsw => "hnsw",
         }
     }
 }
@@ -285,6 +288,25 @@ pub trait VectorIndex: Debug + Send + Sync {
     ///
     /// Surfaced to callers, so an approximate result is never mistaken for an exact one.
     fn is_exact(&self) -> bool;
+
+    /// Prepare to answer searches over `source` under `metric`.
+    ///
+    /// An exact scan needs nothing here, so this defaults to doing nothing and existing indexes
+    /// are unaffected. A graph index needs somewhere to build, and building inside `search` —
+    /// the only other option — would make the first query after a write pay for the whole
+    /// structure while holding a read path, and would make a `&self` method that callers
+    /// reasonably expect to be cheap unpredictably expensive.
+    ///
+    /// The engine calls this before every search. An implementation is responsible for deciding
+    /// that nothing has changed and returning quickly; it will be called far more often than
+    /// there is work to do.
+    ///
+    /// # Errors
+    /// Any storage error from reading the source.
+    fn prepare(&self, source: &dyn VectorSource, metric: Metric) -> Result<()> {
+        let _ = (source, metric);
+        Ok(())
+    }
 
     /// Find the best `ctx.top_k` rows, offering them to `out`.
     ///

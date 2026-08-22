@@ -1,0 +1,20 @@
+[package]
+name = "vdb-index-hnsw"
+description = "A hierarchical navigable small world index: approximate nearest neighbours at scale."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+vdb-core.workspace = true
+vdb-index-flat.workspace = true
+
+[dev-dependencies]
+vdb-testkit.workspace = true
+vdb-storage-memory.workspace = true
+
+[lints]
+workspace = true

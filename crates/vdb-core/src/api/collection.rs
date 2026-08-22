@@ -525,6 +525,10 @@ impl Collection {
         };
 
         let index = self.db.index.as_ref();
+        // Give the index a chance to build whatever it needs before the query runs. An exact
+        // scan does nothing here; a graph index builds or extends itself. Doing it here rather
+        // than inside `search` keeps the cost attributable and out of the read path.
+        index.prepare(&source, metric)?;
         let mut top = TopK::new(request.top_k).with_min_score(request.min_score);
         index.search(&ctx, &mut top)?;
 

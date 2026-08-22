@@ -7,6 +7,7 @@ members = [
     "crates/vdb-ffi",
     "crates/vdb-format",
     "crates/vdb-index-flat",
+  "crates/vdb-index-hnsw",
     "crates/vdb-jni",
     "crates/vdb-node",
     "crates/vdb-storage-memory",
@@ -29,6 +30,7 @@ authors = ["vdb contributors"]
 vdb-core = { path = "crates/vdb-core", version = "0.0.1" }
 vdb-format = { path = "crates/vdb-format", version = "0.0.1" }
 vdb-index-flat = { path = "crates/vdb-index-flat", version = "0.0.1" }
+vdb-index-hnsw = { path = "crates/vdb-index-hnsw", version = "0.0.1" }
 vdb-storage-memory = { path = "crates/vdb-storage-memory", version = "0.0.1" }
 vdb-storage-os = { path = "crates/vdb-storage-os", version = "0.0.1" }
 vdb-storage-web = { path = "crates/vdb-storage-web", version = "0.0.1" }

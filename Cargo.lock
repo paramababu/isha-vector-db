@@ -311,6 +311,7 @@ dependencies = [
  "libc",
  "vdb-core",
  "vdb-index-flat",
+ "vdb-index-hnsw",
  "vdb-storage-memory",
  "vdb-storage-os",
  "vdb-testkit",
@@ -355,6 +356,16 @@ name = "vdb-index-flat"
 version = "0.0.1"
 dependencies = [
  "vdb-core",
+ "vdb-testkit",
+]
+
+[[package]]
+name = "vdb-index-hnsw"
+version = "0.0.1"
+dependencies = [
+ "vdb-core",
+ "vdb-index-flat",
+ "vdb-storage-memory",
  "vdb-testkit",
 ]
 

@@ -34,6 +34,30 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
 
 ### Added
 
+- **A graph index (`vdb-index-hnsw`), Phase 3.** Approximate nearest neighbours over a
+  hierarchical navigable small world graph, supplied to `Database::open_with_index` exactly as
+  the flat index is, so `vdb-core` still knows nothing about it
+  ([ADR-0015](docs/adr/0015-hnsw-index.md)).
+
+  Measured against the NEON flat scan on the same corpus, `ef_search` 64: **3.5× faster at
+  recall 1.000** on 5,000 × 128, and **12.8× faster at recall 0.974** on 50,000 × 384. Recall
+  against the beam width at 10,000 × 128: 0.905 at ef 16, 0.960 at 32, 0.992 at 64, 1.000 at 128.
+
+  Two limitations, both stated rather than buried. **Building takes 95 seconds for 50,000 × 384**,
+  and **the graph is not persisted** — it is rebuilt whenever the row count, dimension or metric
+  changes, including on reopen. Persisting it needs the `index_snapshot` slot the manifest already
+  reserves and a format bump, and is the next piece of work.
+
+  `VectorIndex` gained one defaulted method, `prepare(source, metric)`, so an index has somewhere
+  to build that is not inside a `&self` search. Existing implementations are unaffected.
+
+  A filtered search traverses *through* rejected rows and returns only accepted ones; when the
+  graph cannot find `top_k` acceptable rows it hands over to the exact scan. That case is not
+  exotic — a filter that correlates with position in the vector space, such as a category that
+  happens to cluster, leaves the beam in a neighbourhood containing almost nothing that qualifies.
+  Returning eight results where ten exist is a wrong answer, not an approximate one.
+
+
 - **The web SDK (`sdk/web`), running the engine in WebAssembly on OPFS.** Phase 4.
 
   `vdb-storage-web` is a new storage backend that calls a hand-written table of host imports, so
