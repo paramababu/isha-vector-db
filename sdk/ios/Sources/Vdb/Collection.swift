@@ -20,22 +20,57 @@ public final class Collection: @unchecked Sendable {
     ///
     /// The array is read in place; nothing is copied until the bytes reach the log.
     @discardableResult
-    public func upsert(_ id: String, vector: [Float]) throws -> Bool {
+    public func upsert(
+        _ id: String, vector: [Float], metadata: [String: Filter.Value] = [:]
+    ) throws -> Bool {
         let live = try alive()
         var inserted = false
         var idBytes = Array(id.utf8)
+
+        let handle: OpaquePointer? = metadata.isEmpty ? nil : vdb_metadata_new()
+        defer { if let handle { vdb_metadata_free(handle) } }
+        if let handle {
+            for (key, value) in metadata {
+                try Self.set(handle, key, value)
+            }
+        }
+
         try check { error in
             idBytes.withUnsafeMutableBufferPointer { idBuffer in
                 vector.withUnsafeBufferPointer { vectorBuffer in
                     vdb_upsert(
                         live, idBuffer.baseAddress, idBuffer.count,
                         vectorBuffer.baseAddress, UInt32(vectorBuffer.count),
-                        nil, &inserted, error
+                        handle, &inserted, error
                     )
                 }
             }
         }
         return inserted
+    }
+
+    /// Set one metadata field.
+    private static func set(_ handle: OpaquePointer, _ key: String, _ value: Filter.Value) throws {
+        var keyBytes = Array(key.utf8)
+        try check { error in
+            keyBytes.withUnsafeMutableBufferPointer { k in
+                switch value {
+                case let .string(s):
+                    var bytes = Array(s.utf8)
+                    return bytes.withUnsafeMutableBufferPointer { v in
+                        vdb_metadata_set_string(
+                            handle, k.baseAddress, k.count, v.baseAddress, v.count, error
+                        )
+                    }
+                case let .int(i):
+                    return vdb_metadata_set_i64(handle, k.baseAddress, k.count, i, error)
+                case let .double(d):
+                    return vdb_metadata_set_f64(handle, k.baseAddress, k.count, d, error)
+                case let .bool(b):
+                    return vdb_metadata_set_bool(handle, k.baseAddress, k.count, b, error)
+                }
+            }
+        }
     }
 
     /// Remove a document. Returns whether it existed; removing an absent one is not an error.
@@ -87,10 +122,40 @@ public final class Collection: @unchecked Sendable {
             }
         }
         guard let results else { return [] }
-        // Freed on every path, including a throw from inside the loop: the result holds engine
-        // memory, and a loop of searches would otherwise accumulate it.
+        // Freed on every path, including a throw: the result holds engine memory, and a loop of
+        // searches would otherwise accumulate it.
         defer { vdb_results_free(results) }
+        return Self.collect(results)
+    }
 
+    /// Find the nearest documents whose metadata matches a filter.
+    ///
+    /// `topK` counts *matches*, not candidates: a filter excluding most of the collection still
+    /// returns up to `topK` results rather than however many happened to survive among the
+    /// nearest few.
+    public func search(_ query: [Float], topK: Int, filter: Filter) throws -> [Hit] {
+        let live = try alive()
+        guard let builder = vdb_filter_new() else {
+            throw VdbError(code: 0, message: "could not allocate a filter")
+        }
+        defer { vdb_filter_free(builder) }
+        try filter.encode(into: builder)
+
+        var results: OpaquePointer?
+        try check { error in
+            query.withUnsafeBufferPointer { buffer in
+                vdb_search_filtered(
+                    live, buffer.baseAddress, UInt32(buffer.count), topK, builder, &results, error
+                )
+            }
+        }
+        guard let results else { return [] }
+        defer { vdb_results_free(results) }
+        return Self.collect(results)
+    }
+
+    /// Turn a result handle into hits.
+    private static func collect(_ results: OpaquePointer) -> [Hit] {
         let count = vdb_results_len(results)
         var hits: [Hit] = []
         hits.reserveCapacity(count)

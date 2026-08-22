@@ -487,3 +487,268 @@ fn opening_the_same_database_twice_is_refused_with_a_usable_error() {
     let mut err = ptr::null_mut();
     unsafe { vdb_close(first, &mut err) };
 }
+
+// ---------------------------------------------------------------------------
+// filters
+// ---------------------------------------------------------------------------
+
+/// Build metadata for one document.
+fn meta(pairs: &[(&str, &str)], numbers: &[(&str, i64)]) -> *mut vdb_ffi::VdbMetadata {
+    let m = vdb_metadata_new();
+    let mut err = ptr::null_mut();
+    for (k, v) in pairs {
+        unsafe { vdb_metadata_set_string(m, k.as_ptr(), k.len(), v.as_ptr(), v.len(), &mut err) };
+    }
+    for (k, v) in numbers {
+        unsafe { vdb_metadata_set_i64(m, k.as_ptr(), k.len(), *v, &mut err) };
+    }
+    m
+}
+
+fn filtered_ids(c: *mut vdb_ffi::VdbCollection, f: *mut vdb_ffi::VdbFilter) -> Vec<String> {
+    let query = [1.0f32, 0.0];
+    let mut results = ptr::null_mut();
+    let mut err = ptr::null_mut();
+    let rc = unsafe { vdb_search_filtered(c, query.as_ptr(), 2, 10, f, &mut results, &mut err) };
+    assert_eq!(rc, VDB_OK, "filtered search failed: {}", message(err));
+    let mut out = Vec::new();
+    for i in 0..unsafe { vdb_results_len(results) } {
+        let mut len = 0;
+        let ptr = unsafe { vdb_results_id(results, i, &mut len) };
+        out.push(
+            String::from_utf8_lossy(unsafe { std::slice::from_raw_parts(ptr, len) }).into_owned(),
+        );
+    }
+    unsafe { vdb_results_free(results) };
+    out
+}
+
+/// A small corpus with metadata, at decreasing similarity to [1, 0].
+fn corpus(dir: &TempDir) -> (*mut vdb_ffi::VdbDb, *mut vdb_ffi::VdbCollection) {
+    let db = open(dir);
+    let c = collection(db, 2);
+    let mut err = ptr::null_mut();
+    /// id, vector, string fields, integer fields.
+    type Doc = (
+        &'static str,
+        [f32; 2],
+        &'static [(&'static str, &'static str)],
+        &'static [(&'static str, i64)],
+    );
+    let docs: [Doc; 3] = [
+        (
+            "hammer",
+            [1.0, 0.0],
+            &[("category", "tools")],
+            &[("price", 25)],
+        ),
+        (
+            "saw",
+            [0.95, 0.31],
+            &[("category", "tools")],
+            &[("price", 75)],
+        ),
+        ("ball", [0.7, 0.7], &[("category", "toys")], &[]),
+    ];
+    for (id, v, strings, numbers) in docs {
+        let m = meta(strings, numbers);
+        let rc = unsafe {
+            vdb_upsert(
+                c,
+                id.as_ptr(),
+                id.len(),
+                v.as_ptr(),
+                2,
+                m,
+                ptr::null_mut(),
+                &mut err,
+            )
+        };
+        assert_eq!(rc, VDB_OK, "{}", message(err));
+        unsafe { vdb_metadata_free(m) };
+    }
+    (db, c)
+}
+
+const OP_EQ: i32 = 1;
+const OP_LT: i32 = 5;
+const UNARY_EXISTS: i32 = 1;
+const COMBINE_AND: i32 = 1;
+const COMBINE_NOT: i32 = 3;
+
+#[test]
+fn a_filter_narrows_a_search() {
+    let dir = TempDir::new("filter");
+    let (db, c) = corpus(&dir);
+    let mut err = ptr::null_mut();
+
+    let f = vdb_filter_new();
+    let field = b"category";
+    let value = b"tools";
+    let rc = unsafe {
+        vdb_filter_compare_str(
+            f,
+            field.as_ptr(),
+            field.len(),
+            OP_EQ,
+            value.as_ptr(),
+            value.len(),
+            &mut err,
+        )
+    };
+    assert_eq!(rc, VDB_OK, "{}", message(err));
+    assert_eq!(
+        unsafe { vdb_filter_depth(f) },
+        1,
+        "a complete filter has depth 1"
+    );
+
+    assert_eq!(filtered_ids(c, f), vec!["hammer", "saw"]);
+
+    // The builder is reusable: the same filter runs again unchanged.
+    assert_eq!(filtered_ids(c, f), vec!["hammer", "saw"]);
+    unsafe { vdb_filter_free(f) };
+    unsafe { vdb_collection_free(c) };
+    unsafe { vdb_close(db, &mut err) };
+}
+
+/// The point of a stack: arbitrary nesting in a handful of calls.
+#[test]
+fn filters_compose_to_arbitrary_depth() {
+    let dir = TempDir::new("filter-compose");
+    let (db, c) = corpus(&dir);
+    let mut err = ptr::null_mut();
+
+    // category == "tools" AND price < 50
+    let f = vdb_filter_new();
+    unsafe {
+        vdb_filter_compare_str(
+            f,
+            b"category".as_ptr(),
+            8,
+            OP_EQ,
+            b"tools".as_ptr(),
+            5,
+            &mut err,
+        );
+        vdb_filter_compare_f64(f, b"price".as_ptr(), 5, OP_LT, 50.0, &mut err);
+        assert_eq!(vdb_filter_depth(f), 2, "two leaves on the stack");
+        assert_eq!(vdb_filter_combine(f, COMBINE_AND, 2, &mut err), VDB_OK);
+        assert_eq!(vdb_filter_depth(f), 1, "combined into one");
+    }
+    assert_eq!(filtered_ids(c, f), vec!["hammer"]);
+    unsafe { vdb_filter_free(f) };
+
+    // NOT (category == "tools")
+    let g = vdb_filter_new();
+    unsafe {
+        vdb_filter_compare_str(
+            g,
+            b"category".as_ptr(),
+            8,
+            OP_EQ,
+            b"tools".as_ptr(),
+            5,
+            &mut err,
+        );
+        assert_eq!(vdb_filter_combine(g, COMBINE_NOT, 1, &mut err), VDB_OK);
+    }
+    assert_eq!(filtered_ids(c, g), vec!["ball"]);
+    unsafe { vdb_filter_free(g) };
+
+    // An absent field: "ball" has no price.
+    let h = vdb_filter_new();
+    unsafe { vdb_filter_unary(h, b"price".as_ptr(), 5, UNARY_EXISTS, &mut err) };
+    assert_eq!(filtered_ids(c, h), vec!["hammer", "saw"]);
+    unsafe { vdb_filter_free(h) };
+
+    unsafe { vdb_collection_free(c) };
+    unsafe { vdb_close(db, &mut err) };
+}
+
+/// An unbalanced builder must be refused. A filter missing a clause returns documents the
+/// caller asked to exclude, and does so without saying anything.
+#[test]
+fn an_unbalanced_filter_is_refused_rather_than_interpreted() {
+    let dir = TempDir::new("filter-unbalanced");
+    let (db, c) = corpus(&dir);
+    let mut err = ptr::null_mut();
+
+    // Two leaves, never combined.
+    let f = vdb_filter_new();
+    unsafe {
+        vdb_filter_compare_str(
+            f,
+            b"category".as_ptr(),
+            8,
+            OP_EQ,
+            b"tools".as_ptr(),
+            5,
+            &mut err,
+        );
+        vdb_filter_compare_f64(f, b"price".as_ptr(), 5, OP_LT, 50.0, &mut err);
+    }
+    assert_eq!(unsafe { vdb_filter_depth(f) }, 2);
+
+    let query = [1.0f32, 0.0];
+    let mut results = ptr::null_mut();
+    let rc = unsafe { vdb_search_filtered(c, query.as_ptr(), 2, 10, f, &mut results, &mut err) };
+    assert_eq!(
+        rc, VDB_INVALID_ARGUMENT,
+        "an unbalanced filter must not run"
+    );
+
+    // An empty builder likewise.
+    let empty = vdb_filter_new();
+    let rc =
+        unsafe { vdb_search_filtered(c, query.as_ptr(), 2, 10, empty, &mut results, &mut err) };
+    assert_eq!(rc, VDB_INVALID_ARGUMENT);
+
+    // And combining more than were pushed.
+    assert_eq!(
+        unsafe { vdb_filter_combine(empty, COMBINE_AND, 3, &mut err) },
+        VDB_INVALID_ARGUMENT
+    );
+    assert_eq!(
+        unsafe { vdb_filter_combine(f, COMBINE_NOT, 2, &mut err) },
+        VDB_INVALID_ARGUMENT,
+        "NOT takes exactly one operand"
+    );
+
+    unsafe { vdb_filter_free(f) };
+    unsafe { vdb_filter_free(empty) };
+    unsafe { vdb_collection_free(c) };
+    unsafe { vdb_close(db, &mut err) };
+}
+
+#[test]
+fn filter_misuse_is_refused_without_crashing() {
+    let mut err = ptr::null_mut();
+    unsafe {
+        // Null handles.
+        assert_eq!(
+            vdb_filter_compare_i64(ptr::null_mut(), b"a".as_ptr(), 1, OP_EQ, 1, &mut err),
+            VDB_NULL_POINTER
+        );
+        assert_eq!(vdb_filter_depth(ptr::null()), 0);
+        vdb_filter_free(ptr::null_mut());
+
+        // Undefined discriminants.
+        let f = vdb_filter_new();
+        assert_eq!(
+            vdb_filter_compare_i64(f, b"a".as_ptr(), 1, 99, 1, &mut err),
+            VDB_INVALID_ARGUMENT
+        );
+        assert_eq!(
+            vdb_filter_unary(f, b"a".as_ptr(), 1, 99, &mut err),
+            VDB_INVALID_ARGUMENT
+        );
+        // A prefix test against a number is a mistake, not a coercion question.
+        assert_eq!(
+            vdb_filter_compare_i64(f, b"a".as_ptr(), 1, 7, 1, &mut err),
+            VDB_INVALID_ARGUMENT
+        );
+        assert_eq!(vdb_filter_depth(f), 0, "nothing should have been pushed");
+        vdb_filter_free(f);
+    }
+}

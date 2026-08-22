@@ -207,6 +207,93 @@ const uint8_t *vdb_results_id(const vdb_results_t *results, size_t index, size_t
 /* Release a search result. NULL is a no-op. */
 void vdb_results_free(vdb_results_t *results);
 
+/* ---- filters ------------------------------------------------------------ */
+
+/*
+ * Filters are built on a stack, in postfix order.
+ *
+ * A filter is a tree, and C has no good way to receive one. A function per operator per value
+ * type would be thirty-odd functions and still could not nest; an encoded payload would make
+ * every binding reimplement an encoding, and one of them would get it wrong. A stack expresses
+ * any filter at any depth in eight functions:
+ *
+ *     vdb_filter_t *f = vdb_filter_new();
+ *     vdb_filter_compare_str(f, "category", 8, VDB_OP_EQ, "tools", 5, NULL);
+ *     vdb_filter_compare_f64(f, "price", 5, VDB_OP_LT, 50.0, NULL);
+ *     vdb_filter_combine(f, VDB_COMBINE_AND, 2, NULL);
+ *     vdb_search_filtered(collection, query, dim, 10, f, &results, &err);
+ *     vdb_filter_free(f);
+ *
+ * The cost of a stack is that an unbalanced sequence is a runtime error rather than a compile
+ * error, so vdb_filter_depth() lets you check: a complete filter has depth 1.
+ *
+ * Evaluation is total. Comparing a string to a number is false, not an error; a field no
+ * document has is absent. See docs/api/filters.md for the rules, including the three that
+ * surprise people.
+ */
+
+typedef enum {
+  VDB_OP_EQ = 1,
+  VDB_OP_NE = 2,          /* the exact negation of EQ, so it matches absent fields */
+  VDB_OP_GT = 3,
+  VDB_OP_GTE = 4,
+  VDB_OP_LT = 5,
+  VDB_OP_LTE = 6,
+  VDB_OP_STARTS_WITH = 7, /* strings only */
+  VDB_OP_CONTAINS = 8     /* array membership, not substring */
+} vdb_op_t;
+
+typedef enum {
+  VDB_UNARY_EXISTS = 1,  /* present, including an explicit null */
+  VDB_UNARY_IS_NULL = 2  /* absent, or present and null */
+} vdb_unary_t;
+
+typedef enum {
+  VDB_COMBINE_AND = 1,
+  VDB_COMBINE_OR = 2,
+  VDB_COMBINE_NOT = 3 /* takes exactly one operand */
+} vdb_combine_t;
+
+typedef struct vdb_filter vdb_filter_t;
+
+vdb_filter_t *vdb_filter_new(void);
+void vdb_filter_free(vdb_filter_t *filter);
+
+int32_t vdb_filter_compare_str(vdb_filter_t *filter, const uint8_t *field, size_t field_len,
+                               int32_t op, const uint8_t *value, size_t value_len,
+                               vdb_error_t **err);
+int32_t vdb_filter_compare_i64(vdb_filter_t *filter, const uint8_t *field, size_t field_len,
+                               int32_t op, int64_t value, vdb_error_t **err);
+int32_t vdb_filter_compare_f64(vdb_filter_t *filter, const uint8_t *field, size_t field_len,
+                               int32_t op, double value, vdb_error_t **err);
+int32_t vdb_filter_compare_bool(vdb_filter_t *filter, const uint8_t *field, size_t field_len,
+                                int32_t op, bool value, vdb_error_t **err);
+
+/* VDB_UNARY_EXISTS or VDB_UNARY_IS_NULL. */
+int32_t vdb_filter_unary(vdb_filter_t *filter, const uint8_t *field, size_t field_len,
+                         int32_t predicate, vdb_error_t **err);
+
+/*
+ * Pop `count` expressions and push their combination.
+ *
+ * Combining more than were pushed is refused rather than quietly producing a smaller filter: a
+ * filter that silently drops a clause returns documents the caller asked to exclude.
+ */
+int32_t vdb_filter_combine(vdb_filter_t *filter, int32_t combinator, size_t count,
+                           vdb_error_t **err);
+
+/* Expressions on the stack. A complete filter has exactly 1. Returns 0 for NULL. */
+size_t vdb_filter_depth(const vdb_filter_t *filter);
+
+/*
+ * Search, restricted to documents matching a filter.
+ *
+ * The filter must be complete. The builder is not consumed and may be reused.
+ */
+int32_t vdb_search_filtered(const vdb_collection_t *collection, const float *query,
+                            uint32_t dimension, size_t top_k, const vdb_filter_t *filter,
+                            vdb_results_t **out, vdb_error_t **err);
+
 /* ---- metadata ----------------------------------------------------------- */
 
 /*

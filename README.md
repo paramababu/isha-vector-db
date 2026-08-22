@@ -68,7 +68,8 @@ Nothing at or below the public API knows which platform it is on. That is enforc
 | Node SDK (`@vdb/node`) | Done |
 | Android SDK (JNI + Java API) | Done |
 | iOS SDK (Swift + XCFramework) | Done |
-| Flutter, React Native, Web | Next |
+| Metadata filters across the C ABI and Swift | Done |
+| Filters in Node and Java; then Flutter, React Native, Web | Next |
 | `vdb-index-flat`, search, filters | Not started |
 | `vdb-storage-os` | Not started |
 | C ABI, SDKs, HNSW, web | Later phases |
@@ -177,8 +178,11 @@ Libraries are linked for 16 KB pages, which Android 15 requires on some devices.
 let db = try Database(path: url.path)
 let docs = try db.collection("docs", dimension: 384, metric: .cosine)
 
-try docs.upsert("a", vector: embedding)
-for hit in try docs.search(query, topK: 10) {
+try docs.upsert("a", vector: embedding, metadata: ["category": .string("tools")])
+
+let cheapTools = Filter.equals("category", .string("tools"))
+    && .lessThan("price", .double(50))
+for hit in try docs.search(query, topK: 10, filter: cheapTools) {
     print(hit.id, hit.score)
 }
 try db.close()

@@ -115,6 +115,12 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
   Tested on macOS rather than in a simulator, so the loop is under a second.
 - `measure-ios-size.sh` reports what linking the engine actually adds to an application — 662 KB
   dead-stripped — rather than the misleading size of the static archive.
+- **Filters across the C ABI**: a postfix builder (`vdb_filter_*`) expressing any filter at any
+  depth in eight functions, plus `vdb_search_filtered`. An unbalanced builder is refused rather
+  than interpreted.
+- **Filters in Swift**: an `indirect enum` tree with `&&`, `||` and `!`, flattened to postfix on
+  the way down, so the stack is invisible to callers and an unbalanced sequence is
+  unconstructible. Metadata can now be written from Swift too.
 - CI: `ci-format` refuses a golden-fixture change without a declared `FORMAT-CHANGE:` and a
   `FORMAT_VERSION` bump; `nightly` runs each fuzz target for an hour and reports coverage.
 

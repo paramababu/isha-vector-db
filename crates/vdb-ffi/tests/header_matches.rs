@@ -6,20 +6,43 @@
 //! that cost down — it fails if a function exists on one side and not the other, in either
 //! direction.
 
-#![allow(clippy::unwrap_used, clippy::panic, clippy::indexing_slicing)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing
+)]
 
 use std::collections::BTreeSet;
 
 const HEADER: &str = include_str!("../include/vdb.h");
-const SOURCES: [&str; 2] = [
-    include_str!("../src/lib.rs"),
-    include_str!("../src/error.rs"),
-];
+/// Every Rust source in the crate, read at run time.
+///
+/// A hardcoded list of `include_str!`s is what this used to be, and it had exactly the failure
+/// it exists to prevent: adding `filter.rs` made nine new exports invisible to the guard, which
+/// then reported them as declared-but-missing. A guard with a manual list of what to guard has
+/// a gap the size of the next file someone adds.
+fn sources() -> Vec<String> {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut out = Vec::new();
+    for entry in std::fs::read_dir(&dir).expect("read src/").flatten() {
+        let path = entry.path();
+        if path.extension().is_some_and(|e| e == "rs") {
+            out.push(std::fs::read_to_string(&path).expect("read source"));
+        }
+    }
+    assert!(
+        out.len() >= 4,
+        "expected several sources in src/, found {}",
+        out.len()
+    );
+    out
+}
 
 /// Functions the Rust side exports.
 fn exported() -> BTreeSet<String> {
     let mut out = BTreeSet::new();
-    for source in SOURCES {
+    for source in sources() {
         let mut lines = source.lines().peekable();
         while let Some(line) = lines.next() {
             if line.trim() != "#[no_mangle]" {

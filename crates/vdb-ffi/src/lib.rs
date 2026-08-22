@@ -45,8 +45,15 @@
 #![warn(missing_docs)]
 
 mod error;
+mod filter;
 mod handles;
 mod strings;
+
+pub use filter::{
+    vdb_filter_combine, vdb_filter_compare_bool, vdb_filter_compare_f64, vdb_filter_compare_i64,
+    vdb_filter_compare_str, vdb_filter_depth, vdb_filter_free, vdb_filter_new, vdb_filter_unary,
+    VdbFilter,
+};
 
 pub use error::{vdb_error_code, vdb_error_free, vdb_error_message, VdbError};
 
@@ -524,6 +531,47 @@ pub unsafe extern "C" fn vdb_results_id(
         *out_len = len;
         ptr
     }
+}
+
+/// Search, restricted to documents whose metadata matches a filter.
+///
+/// The filter must be complete — exactly one expression on the builder's stack. An unbalanced
+/// builder is refused rather than being interpreted generously, because a filter missing a
+/// clause returns documents the caller asked to exclude, and does so silently.
+///
+/// The builder is not consumed and may be reused for further searches.
+///
+/// # Safety
+/// `collection` and `filter` must be live; `query` must point to `dimension` readable floats;
+/// `out` must be writable. Release the result with [`vdb_results_free`].
+#[no_mangle]
+pub unsafe extern "C" fn vdb_search_filtered(
+    collection: *const VdbCollection,
+    query: *const f32,
+    dimension: u32,
+    top_k: usize,
+    filter: *const VdbFilter,
+    out: *mut *mut VdbResults,
+    err: *mut *mut VdbError,
+) -> i32 {
+    guard(err, || {
+        if out.is_null() || filter.is_null() {
+            return Err(Boundary::Null);
+        }
+        // SAFETY: the caller guarantees `collection` is live and `query` is readable.
+        let c = unsafe { VdbCollection::borrow(collection) }?;
+        let values = unsafe { borrow_floats(query, dimension) }?;
+        // SAFETY: the caller guarantees `filter` is live.
+        let built = unsafe { (*filter).finish() }.ok_or(Boundary::InvalidArgument)?;
+
+        let request = SearchRequest::new(VectorView::f32(values), top_k)
+            .with_filter(built)
+            .with_include(Include::NONE);
+        let response = c.search(&request).map_err(Boundary::Db)?;
+        // SAFETY: `out` was checked non-null above.
+        unsafe { *out = VdbResults::into_raw(response) };
+        Ok(())
+    })
 }
 
 /// Release a search result.

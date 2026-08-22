@@ -193,3 +193,106 @@ final class VdbTests: XCTestCase {
         try db.close()
     }
 }
+
+/// Filters, through the Swift tree and the ABI's postfix builder beneath it.
+final class FilterTests: XCTestCase {
+    private var directory: URL!
+    private var db: Database!
+    private var docs: Collection!
+
+    override func setUpWithError() throws {
+        directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("vdb-filter-\(UUID().uuidString)")
+        db = try Database(path: directory.path)
+        docs = try db.collection("docs", dimension: 2)
+
+        // Decreasing similarity to [1, 0], so a filter changing *which* documents come back is
+        // distinguishable from one changing their order.
+        try docs.upsert("hammer", vector: [1, 0],
+                        metadata: ["category": .string("tools"), "price": .double(25), "sale": .bool(true)])
+        try docs.upsert("saw", vector: [0.95, 0.31],
+                        metadata: ["category": .string("tools"), "price": .double(75)])
+        try docs.upsert("ball", vector: [0.7, 0.7],
+                        metadata: ["category": .string("toys")])
+    }
+
+    override func tearDownWithError() throws {
+        try? db.close()
+        try? FileManager.default.removeItem(at: directory)
+    }
+
+    private func ids(_ filter: Filter, topK: Int = 10) throws -> [String] {
+        try docs.search([1, 0], topK: topK, filter: filter).map(\.id)
+    }
+
+    func testASimpleFilterNarrowsWithoutReordering() throws {
+        XCTAssertEqual(try docs.search([1, 0], topK: 3).map(\.id), ["hammer", "saw", "ball"])
+        XCTAssertEqual(try ids(.equals("category", .string("tools"))), ["hammer", "saw"])
+    }
+
+    func testFiltersCompose() throws {
+        let cheapTools = Filter.equals("category", .string("tools"))
+            && .lessThan("price", .double(50))
+        XCTAssertEqual(try ids(cheapTools), ["hammer"])
+
+        let either = Filter.equals("category", .string("toys"))
+            || .greaterThan("price", .double(50))
+        XCTAssertEqual(try ids(either), ["saw", "ball"])
+
+        XCTAssertEqual(try ids(!Filter.equals("category", .string("tools"))), ["ball"])
+    }
+
+    func testDeepNesting() throws {
+        // (tools AND (cheap OR on sale)) OR toys — three levels, one expression.
+        let filter = Filter.any([
+            .all([
+                .equals("category", .string("tools")),
+                .any([.lessThan("price", .double(50)), .equals("sale", .bool(true))]),
+            ]),
+            .equals("category", .string("toys")),
+        ])
+        XCTAssertEqual(try ids(filter), ["hammer", "ball"])
+    }
+
+    func testAbsentFieldsBehaveAsDocumented() throws {
+        // "ball" has no price.
+        XCTAssertEqual(try ids(.exists("price")), ["hammer", "saw"])
+        XCTAssertEqual(try ids(.isNull("price")), ["ball"])
+        // notEquals is the exact negation of equals, so it matches the absent field too.
+        XCTAssertEqual(try ids(.notEquals("price", .double(25))), ["saw", "ball"])
+    }
+
+    func testPrefixAndArrayMembership() throws {
+        XCTAssertEqual(try ids(.startsWith("category", "too")), ["hammer", "saw"])
+        // Not a substring test: "tools" contains "too" as text but is not an array.
+        XCTAssertEqual(try ids(.contains("category", .string("too"))), [])
+    }
+
+    func testEmptyCombinatorsAreTheIdentityOfTheirOperation() throws {
+        XCTAssertEqual(try ids(.all([])), ["hammer", "saw", "ball"], "an empty all matches everything")
+        XCTAssertEqual(try ids(.any([])), [], "an empty any matches nothing")
+    }
+
+    func testTopKCountsMatchesNotCandidates() throws {
+        // Only one of the three matches, and asking for two returns the one rather than
+        // silently returning fewer because the nearest were excluded.
+        XCTAssertEqual(try ids(.equals("category", .string("toys")), topK: 2), ["ball"])
+    }
+
+    func testAFilterMatchingNothingReturnsNothing() throws {
+        XCTAssertEqual(try ids(.equals("category", .string("nonexistent"))), [])
+    }
+
+    func testFiltersWorkAfterAFlush() throws {
+        try db.flush()
+        XCTAssertEqual(try ids(.equals("category", .string("tools"))), ["hammer", "saw"])
+    }
+
+    /// A type mismatch is false, never an error — the property the whole filter design rests on.
+    func testTypeMismatchesAreFalseRatherThanErrors() throws {
+        XCTAssertEqual(try ids(.equals("category", .int(1))), [])
+        XCTAssertEqual(try ids(.greaterThan("category", .int(1))), [])
+        // And gt/lte are both false there, so they are not negations of each other.
+        XCTAssertEqual(try ids(.lessThanOrEqual("category", .int(1))), [])
+    }
+}
