@@ -59,7 +59,8 @@ Nothing at or below the public API knows which platform it is on. That is enforc
 | Segment flush, manifest commit, full reopen | Done |
 | `Database`/`Collection` public API, CRUD, batches | Done |
 | Search: metrics, top-K, exact scan | Done |
-| Metadata filters | Next |
+| Metadata filters | Done |
+| `vdb-storage-os`: the real filesystem backend | Next |
 | `vdb-index-flat`, search, filters | Not started |
 | `vdb-storage-os` | Not started |
 | C ABI, SDKs, HNSW, web | Later phases |
@@ -93,8 +94,17 @@ assert_eq!(results.hits[0].id, DocId::from("a"));
 db.close()?;
 ```
 
-Scores are always higher-is-better, whatever the metric; ties break on ascending id. Metadata
-filtering is the next step.
+Scores are always higher-is-better, whatever the metric; ties break on ascending id.
+Searches can be narrowed with a [metadata filter](docs/api/filters.md):
+
+```rust
+let cheap_tools = Filter::eq("category", Value::Str("tools".into()))
+    .and(Filter::lt("price", Value::F64(50.0)));
+
+let results = docs.search(
+    &SearchRequest::new(VectorView::f32(&query), 10).with_filter(&cheap_tools),
+)?;
+```
 
 ## Building
 

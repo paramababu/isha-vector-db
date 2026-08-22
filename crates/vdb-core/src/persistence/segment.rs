@@ -365,6 +365,31 @@ impl SegmentData {
         Ok(self.tombstones.generation)
     }
 
+    /// Read just a row's metadata.
+    ///
+    /// A filtered scan calls this once per candidate, so it avoids assembling a `Document` and
+    /// cloning the id the way [`SegmentData::document`] does.
+    ///
+    /// # Errors
+    /// [`CorruptionError`] if the directory points outside the metadata file.
+    pub fn metadata(&self, row: u32) -> Result<Metadata> {
+        let Some(entry) = self.entries.get(row as usize) else {
+            return Ok(Metadata::new());
+        };
+        if entry.meta_len == 0 {
+            return Ok(Metadata::new());
+        }
+        let block =
+            MetaBlock::open(&self.meta_bytes).map_err(|e| from_format_at(e, &DbPath::root()))?;
+        let record = block
+            .record(entry)
+            .map_err(|e| from_format_at(e, &DbPath::root()))?;
+        match record.metadata {
+            Some(vdb_format::Value::Map(m)) => Ok(Metadata::from_map(m)),
+            _ => Ok(Metadata::new()),
+        }
+    }
+
     /// Read a document out of the segment.
     ///
     /// Returns `None` for a dead row, so callers cannot accidentally resurrect a deleted

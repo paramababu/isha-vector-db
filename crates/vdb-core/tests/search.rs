@@ -555,3 +555,296 @@ fn u64_ids_search_and_tie_break_numerically() {
     );
     db.close().unwrap();
 }
+
+// ---------------------------------------------------------------------------
+// metadata filters
+// ---------------------------------------------------------------------------
+
+mod filters {
+    use super::*;
+    use vdb_core::filter::Filter;
+    use vdb_core::metadata::{Metadata, Value};
+
+    fn meta(pairs: &[(&str, Value)]) -> Metadata {
+        let mut m = Metadata::new();
+        for (k, v) in pairs {
+            m.insert(*k, v.clone());
+        }
+        m
+    }
+
+    /// Four documents at increasing angles from the query, so ranking and filtering can be told
+    /// apart: the filter must change *which* documents come back, not their relative order.
+    fn corpus(db: &Database) -> Collection {
+        let c = collection(db, Metric::Cosine, 2);
+        let docs: [(&str, [f32; 2], Metadata); 4] = [
+            (
+                "hammer",
+                [1.0, 0.0],
+                meta(&[
+                    ("category", Value::Str("tools".into())),
+                    ("price", Value::F64(25.0)),
+                    ("tags", Value::Array(vec![Value::Str("hand".into())])),
+                ]),
+            ),
+            (
+                "saw",
+                [0.95, 0.31],
+                meta(&[
+                    ("category", Value::Str("tools".into())),
+                    ("price", Value::F64(75.0)),
+                    (
+                        "tags",
+                        Value::Array(vec![Value::Str("hand".into()), Value::Str("sharp".into())]),
+                    ),
+                ]),
+            ),
+            (
+                "ball",
+                [0.7, 0.7],
+                meta(&[
+                    ("category", Value::Str("toys".into())),
+                    ("price", Value::F64(5.0)),
+                ]),
+            ),
+            (
+                "kite",
+                [0.31, 0.95],
+                meta(&[("category", Value::Str("toys".into()))]),
+            ),
+        ];
+        for (id, v, m) in docs {
+            c.insert(DocumentInput::new(id, VectorView::f32(&v)).with_metadata(m))
+                .unwrap();
+        }
+        c
+    }
+
+    fn filtered(c: &Collection, filter: &Filter, k: usize) -> Vec<String> {
+        let request = SearchRequest::new(VectorView::f32(&[1.0, 0.0]), k).with_filter(filter);
+        ids(&c.search(&request).unwrap())
+    }
+
+    #[test]
+    fn a_filter_narrows_the_result_without_reordering_it() {
+        let mem = MemoryStorage::new();
+        let db = db(&mem);
+        let c = corpus(&db);
+
+        assert_eq!(
+            ids(&query(&c, &[1.0, 0.0], 4)),
+            vec!["hammer", "saw", "ball", "kite"]
+        );
+        let tools = Filter::eq("category", Value::Str("tools".into()));
+        assert_eq!(filtered(&c, &tools, 4), vec!["hammer", "saw"]);
+        db.close().unwrap();
+    }
+
+    #[test]
+    fn filters_compose() {
+        let mem = MemoryStorage::new();
+        let db = db(&mem);
+        let c = corpus(&db);
+
+        let cheap_tools = Filter::eq("category", Value::Str("tools".into()))
+            .and(Filter::lt("price", Value::F64(50.0)));
+        assert_eq!(filtered(&c, &cheap_tools, 4), vec!["hammer"]);
+
+        let either = Filter::any(vec![
+            Filter::eq("category", Value::Str("toys".into())),
+            Filter::gt("price", Value::F64(50.0)),
+        ]);
+        assert_eq!(filtered(&c, &either, 4), vec!["saw", "ball", "kite"]);
+
+        let not_tools = Filter::negate(Filter::eq("category", Value::Str("tools".into())));
+        assert_eq!(filtered(&c, &not_tools, 4), vec!["ball", "kite"]);
+        db.close().unwrap();
+    }
+
+    #[test]
+    fn a_filter_on_an_absent_field_matches_only_what_the_rules_say() {
+        let mem = MemoryStorage::new();
+        let db = db(&mem);
+        let c = corpus(&db);
+
+        // "kite" has no price.
+        assert_eq!(
+            filtered(&c, &Filter::exists("price"), 4),
+            vec!["hammer", "saw", "ball"]
+        );
+        assert_eq!(filtered(&c, &Filter::is_null("price"), 4), vec!["kite"]);
+        assert_eq!(
+            filtered(&c, &Filter::gt("price", Value::F64(0.0)), 4),
+            vec!["hammer", "saw", "ball"]
+        );
+        db.close().unwrap();
+    }
+
+    #[test]
+    fn array_membership_and_prefix_filters() {
+        let mem = MemoryStorage::new();
+        let db = db(&mem);
+        let c = corpus(&db);
+
+        assert_eq!(
+            filtered(&c, &Filter::contains("tags", Value::Str("sharp".into())), 4),
+            vec!["saw"]
+        );
+        assert_eq!(
+            filtered(&c, &Filter::starts_with("category", "too"), 4),
+            vec!["hammer", "saw"]
+        );
+        db.close().unwrap();
+    }
+
+    #[test]
+    fn a_filter_matching_nothing_returns_no_hits() {
+        let mem = MemoryStorage::new();
+        let db = db(&mem);
+        let c = corpus(&db);
+        let none = Filter::eq("category", Value::Str("nonexistent".into()));
+        let r = c
+            .search(&SearchRequest::new(VectorView::f32(&[1.0, 0.0]), 4).with_filter(&none))
+            .unwrap();
+        assert!(r.is_empty());
+        assert_eq!(r.stats.considered, 0, "nothing should have been scored");
+        assert_eq!(r.stats.skipped, 4, "everything should have been skipped");
+        db.close().unwrap();
+    }
+
+    #[test]
+    fn a_filter_matching_everything_changes_nothing() {
+        let mem = MemoryStorage::new();
+        let db = db(&mem);
+        let c = corpus(&db);
+        let all = Filter::all(vec![]);
+        assert_eq!(filtered(&c, &all, 4), ids(&query(&c, &[1.0, 0.0], 4)));
+        db.close().unwrap();
+    }
+
+    /// `top_k` must count *matching* documents, not scanned ones. Returning three results
+    /// because the nearest ten happened to be filtered out is a classic and infuriating bug.
+    #[test]
+    fn top_k_counts_matches_not_candidates() {
+        let mem = MemoryStorage::new();
+        let db = db(&mem);
+        let c = collection(&db, Metric::Cosine, 2);
+        for i in 0..100 {
+            let angle = i as f32 * core::f32::consts::TAU / 100.0;
+            let keep = i % 10 == 0;
+            c.insert(
+                DocumentInput::new(
+                    format!("doc-{i:03}"),
+                    VectorView::f32(&[angle.cos(), angle.sin()]),
+                )
+                .with_metadata(meta(&[("keep", Value::Bool(keep))])),
+            )
+            .unwrap();
+        }
+        let keep = Filter::eq("keep", Value::Bool(true));
+        let r = c
+            .search(&SearchRequest::new(VectorView::f32(&[1.0, 0.0]), 5).with_filter(&keep))
+            .unwrap();
+        assert_eq!(
+            r.len(),
+            5,
+            "should return five matches, not five of the nearest hundred"
+        );
+        assert_eq!(
+            r.stats.considered, 10,
+            "only the ten matching rows should be scored"
+        );
+        assert_eq!(r.stats.skipped, 90);
+        db.close().unwrap();
+    }
+
+    #[test]
+    fn filters_work_across_the_memtable_and_segments_alike() {
+        let mem = MemoryStorage::new();
+        let db = db(&mem);
+        let c = corpus(&db);
+        c.flush().unwrap();
+
+        // A buffered document that also matches.
+        c.insert(
+            DocumentInput::new("chisel", VectorView::f32(&[0.99, 0.14])).with_metadata(meta(&[
+                ("category", Value::Str("tools".into())),
+                ("price", Value::F64(30.0)),
+            ])),
+        )
+        .unwrap();
+
+        let tools = Filter::eq("category", Value::Str("tools".into()));
+        assert_eq!(filtered(&c, &tools, 5), vec!["hammer", "chisel", "saw"]);
+        db.close().unwrap();
+    }
+
+    #[test]
+    fn a_filter_survives_a_reopen() {
+        let mem = MemoryStorage::new();
+        {
+            let db = db(&mem);
+            corpus(&db);
+            db.close().unwrap();
+        }
+        let db = db(&mem);
+        let c = db.open_collection("docs").unwrap();
+        let tools = Filter::eq("category", Value::Str("tools".into()));
+        assert_eq!(filtered(&c, &tools, 4), vec!["hammer", "saw"]);
+        db.close().unwrap();
+    }
+
+    #[test]
+    fn filters_combine_with_thresholds_and_metric_overrides() {
+        let mem = MemoryStorage::new();
+        let db = db(&mem);
+        let c = corpus(&db);
+
+        let tools = Filter::eq("category", Value::Str("tools".into()));
+        let r = c
+            .search(
+                &SearchRequest::new(VectorView::f32(&[1.0, 0.0]), 10)
+                    .with_filter(&tools)
+                    .with_min_score(0.99),
+            )
+            .unwrap();
+        assert_eq!(
+            ids(&r),
+            vec!["hammer"],
+            "the threshold applies on top of the filter"
+        );
+        db.close().unwrap();
+    }
+
+    #[test]
+    fn an_over_complex_filter_is_refused() {
+        let mem = MemoryStorage::new();
+        let db = db(&mem);
+        let c = corpus(&db);
+        let mut f = Filter::exists("category");
+        for _ in 0..64 {
+            f = Filter::negate(f);
+        }
+        let request = SearchRequest::new(VectorView::f32(&[1.0, 0.0]), 4).with_filter(&f);
+        assert!(c.search(&request).is_err());
+        db.close().unwrap();
+    }
+
+    /// A document with no metadata at all must not break a filtered scan.
+    #[test]
+    fn documents_without_metadata_are_handled() {
+        let mem = MemoryStorage::new();
+        let db = db(&mem);
+        let c = collection(&db, Metric::Cosine, 2);
+        add(&c, "bare", &[1.0, 0.0]);
+        c.insert(
+            DocumentInput::new("tagged", VectorView::f32(&[0.9, 0.1]))
+                .with_metadata(meta(&[("kind", Value::Str("x".into()))])),
+        )
+        .unwrap();
+
+        assert_eq!(filtered(&c, &Filter::exists("kind"), 5), vec!["tagged"]);
+        assert_eq!(filtered(&c, &Filter::is_null("kind"), 5), vec!["bare"]);
+        db.close().unwrap();
+    }
+}

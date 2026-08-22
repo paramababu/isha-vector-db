@@ -11,7 +11,8 @@ use crate::api::{
 };
 use crate::document::{DocId, Document, DocumentInput, Include};
 use crate::error::{ConflictError, NotFoundError, Result, TransactionError};
-use crate::index::{Budget, LiveSet, SearchCtx, VectorIndex, VectorSource};
+use crate::filter::{self, Filter};
+use crate::index::{Budget, LiveSet, RowPredicate, SearchCtx, VectorIndex, VectorSource};
 use crate::metadata::Metadata;
 use crate::persistence::segment::{flush_memtable, list_segment_ids, remove_segment, SegmentData};
 use crate::persistence::{layout, replay_into, wal::WalWriter};
@@ -498,13 +499,23 @@ impl Collection {
         let state = self.read_state()?;
 
         let source = CollectionSource::build(&state, self.dimension())?;
+        let compiled = match request.filter {
+            Some(f) => {
+                f.validate()?;
+                Some(CompiledFilter {
+                    filter: f,
+                    source: &source,
+                })
+            }
+            None => None,
+        };
         let ctx = SearchCtx {
             query: &query,
             top_k: request.top_k,
             metric,
             source: &source,
             live: &source,
-            filter: None,
+            filter: compiled.as_ref().map(|c| c as &dyn RowPredicate),
             min_score: request.min_score,
             params: request.params,
             budget,
@@ -858,6 +869,21 @@ impl<'a> CollectionSource<'a> {
         }
     }
 
+    /// A row's metadata, for filter evaluation.
+    fn metadata(&self, row: crate::document::RowId) -> Result<Metadata> {
+        if row.segment() == MEMTABLE_SEGMENT {
+            return Ok(self
+                .memtable_rows
+                .get(row.row() as usize)
+                .and_then(|r| r.metadata.clone())
+                .unwrap_or_default());
+        }
+        match self.state.segments.get(row.segment() as usize) {
+            Some(seg) => seg.metadata(row.row()),
+            None => Ok(Metadata::new()),
+        }
+    }
+
     fn doc_id(&self, row: crate::document::RowId) -> Option<DocId> {
         if row.segment() == MEMTABLE_SEGMENT {
             return self
@@ -968,5 +994,24 @@ impl LiveSet for CollectionSource<'_> {
             Some(seg) => seg.is_live(row.row()),
             None => false,
         }
+    }
+}
+
+/// A validated filter, bound to the rows of one collection.
+///
+/// Fetching a candidate's metadata is the cost here — a decode per row that passes the live
+/// check. A future planner can avoid it for fields covered by a secondary index, which is what
+/// [`Filter::referenced_fields`] exists to feed; and for a very selective filter it can build a
+/// row bitmap first so the scan skips most of the memory traffic. Neither helps a flat scan
+/// today, which already tests the predicate before it pays for a distance, so neither is built.
+struct CompiledFilter<'a> {
+    filter: &'a Filter,
+    source: &'a CollectionSource<'a>,
+}
+
+impl RowPredicate for CompiledFilter<'_> {
+    fn matches(&self, row: crate::document::RowId) -> Result<bool> {
+        let metadata = self.source.metadata(row)?;
+        Ok(filter::matches(self.filter, &metadata))
     }
 }

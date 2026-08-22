@@ -28,6 +28,7 @@ pub mod api;
 pub mod clock;
 pub mod document;
 pub mod error;
+pub mod filter;
 pub mod index;
 pub mod metadata;
 pub mod path;
@@ -47,6 +48,7 @@ pub use api::{
 pub use clock::{Clock, ManualClock};
 pub use document::{DocId, Document, DocumentInput, IdKind, Include, RowId};
 pub use error::{DbError, ErrorCode, Recoverability, Result};
+pub use filter::{Field, Filter};
 pub use metadata::{Metadata, Value};
 pub use path::DbPath;
 pub use persistence::Durability;

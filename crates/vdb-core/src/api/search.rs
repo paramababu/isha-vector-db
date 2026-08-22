@@ -1,6 +1,7 @@
 //! Search requests and results.
 
 use crate::document::{DocId, Document, Include};
+use crate::filter::Filter;
 use crate::index::{IndexKind, SearchParams};
 use crate::search::Metric;
 use crate::vector::VectorView;
@@ -18,6 +19,11 @@ pub struct SearchRequest<'a> {
     /// directory were computed for the collection's own metric, so an override that needs
     /// different precomputation gains nothing from them.
     pub metric: Option<Metric>,
+    /// Restrict results to documents whose metadata satisfies this predicate.
+    ///
+    /// Evaluated per candidate before scoring, so a filtered-out document costs a metadata read
+    /// rather than a distance computation.
+    pub filter: Option<&'a Filter>,
     /// Discard results scoring below this. Inclusive.
     ///
     /// In *score* space, where higher is better — so for `L2`, whose scores are negated squared
@@ -36,6 +42,7 @@ impl<'a> SearchRequest<'a> {
             vector,
             top_k,
             metric: None,
+            filter: None,
             min_score: None,
             include: Include::default(),
             params: SearchParams::default(),
@@ -46,6 +53,13 @@ impl<'a> SearchRequest<'a> {
     #[must_use]
     pub fn with_metric(mut self, metric: Metric) -> Self {
         self.metric = Some(metric);
+        self
+    }
+
+    /// Restrict results to documents matching a filter.
+    #[must_use]
+    pub fn with_filter(mut self, filter: &'a Filter) -> Self {
+        self.filter = Some(filter);
         self
     }
 
@@ -104,6 +118,9 @@ pub struct SearchStats {
     /// Rows the index actually examined.
     pub scanned: u64,
     /// Rows skipped because they were deleted or filtered out.
+    ///
+    /// Together with `considered`, this is how a caller judges a filter's selectivity — and
+    /// therefore whether a scan is doing far more work than the results justify.
     pub skipped: u64,
 }
 

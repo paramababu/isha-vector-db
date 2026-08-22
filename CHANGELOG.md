@@ -60,6 +60,11 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
   `Budget`, and `ExactScan` — the always-available reference implementation.
 - `vdb-index-flat`: the home of the future SIMD kernels, delegating to the reference today, with
   the differential and exactness suite that will validate them.
+- **Metadata filters**: a typed expression tree (`Eq`/`Ne`/`Gt`/`Gte`/`Lt`/`Lte`/`In`/`Nin`/
+  `Exists`/`IsNull`/`StartsWith`/`Contains`/`And`/`Or`/`Not`) over dotted field paths, wired
+  into `SearchRequest`. Evaluation is total — a type mismatch is `false`, never an error — and
+  the rules are documented in `docs/api/filters.md`. `top_k` counts matches rather than
+  candidates, and `SearchStats` reports selectivity.
 - CI: `ci-format` refuses a golden-fixture change without a declared `FORMAT-CHANGE:` and a
   `FORMAT_VERSION` bump; `nightly` runs each fuzz target for an hour and reports coverage.
 

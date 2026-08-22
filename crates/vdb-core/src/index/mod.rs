@@ -89,14 +89,22 @@ impl LiveSet for AllLive {
 }
 
 /// An arbitrary per-row test, such as a compiled metadata filter.
+///
+/// Fallible, unlike the filter evaluation it usually wraps. Filter *semantics* are total — no
+/// combination of filter and document can error — but *fetching* the document's metadata reads
+/// a segment, and that can meet corruption. Returning `false` there would turn data loss into a
+/// quietly shorter result set, which is precisely the failure mode this project refuses.
 pub trait RowPredicate: Send + Sync {
     /// Whether this row should be considered.
-    fn matches(&self, row: RowId) -> bool;
+    ///
+    /// # Errors
+    /// Any error from fetching what the predicate needs.
+    fn matches(&self, row: RowId) -> Result<bool>;
 }
 
 impl<F: Fn(RowId) -> bool + Send + Sync> RowPredicate for F {
-    fn matches(&self, row: RowId) -> bool {
-        self(row)
+    fn matches(&self, row: RowId) -> Result<bool> {
+        Ok(self(row))
     }
 }
 
@@ -226,9 +234,17 @@ impl Debug for SearchCtx<'_> {
 
 impl SearchCtx<'_> {
     /// Whether a row should be scored at all.
-    pub fn admits(&self, row: RowId) -> bool {
-        // `map_or` rather than `is_none_or`, which is newer than our MSRV.
-        self.live.is_live(row) && self.filter.map_or(true, |f| f.matches(row))
+    ///
+    /// # Errors
+    /// Whatever the filter's predicate returns.
+    pub fn admits(&self, row: RowId) -> Result<bool> {
+        if !self.live.is_live(row) {
+            return Ok(false);
+        }
+        match self.filter {
+            Some(filter) => filter.matches(row),
+            None => Ok(true),
+        }
     }
 }
 
@@ -332,7 +348,7 @@ impl VectorIndex for ExactScan {
             // Dead and filtered-out rows are skipped before scoring, not after: the dot product
             // is the expensive part and there is no reason to pay it for a row that cannot be
             // returned.
-            if !ctx.admits(row) {
+            if !ctx.admits(row)? {
                 return Ok(());
             }
             out.offer(row, scorer.score_bytes(bytes, row_inv_norm));
