@@ -50,7 +50,16 @@ pub(crate) fn search(
     // have changed under a concurrent search. Scanning gives the right answer either way, which
     // is what matters — being approximate is a licence to return slightly worse results, not
     // wrong ones.
-    if graph.len() == 0 || graph.metric != Some(ctx.metric) || graph.dimension != ctx.query.len() {
+    // The row count is checked here, not only in `prepare`, because the two are separate lock
+    // acquisitions: `prepare` releases the graph before `search` takes it again, and a concurrent
+    // writer can replace it in between. Without this check that window returns results silently
+    // missing the newest documents — a wrong answer, not a slow one, and one that would surface
+    // as "the document I just wrote is not in the results" long after the fact.
+    if graph.len() != ctx.source.len()
+        || graph.len() == 0
+        || graph.metric != Some(ctx.metric)
+        || graph.dimension != ctx.query.len()
+    {
         return fallback(ctx, out);
     }
     let Some(entry) = graph.entry else {

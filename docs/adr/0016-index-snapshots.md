@@ -88,3 +88,23 @@ mostly about being wrong:
 
 `snapshot.rs` is the one module in the crate that reads bytes it did not write, and it carries no
 `indexing_slicing` allowance for exactly that reason.
+
+## Concurrency
+
+The graph is the only shared mutable state in the system — one structure behind an `RwLock`, read
+by every search and replaced or extended by whichever thread notices the data has moved. Writing
+tests for it found two defects that reasoning had missed:
+
+- `prepare` releases the lock before `search` takes it again, so a concurrent writer could swap
+  the graph in between and a search would return results silently missing the newest documents.
+  `search` now checks that the graph covers the source and falls back to the exact scan if not.
+- A thread finishing a build for N rows would overwrite a graph another thread had already
+  extended to N+5, because the guard asked only "is this valid for N" — which the newer graph
+  also fails. The older graph won.
+
+The first attempt at testing this spawned threads and hoped. It passed with **both** fixes
+reverted, which makes it worthless as a guard however reassuring it looked. What works is to
+construct the state the race produces and test that directly — a graph that does not cover its
+source is reachable with no threads at all — and, where the interleaving itself is the subject,
+to force it with a barrier: a source that blocks inside `for_each` until the other thread has
+finished, so the loser always finishes last. Both tests fail when their fix is reverted.

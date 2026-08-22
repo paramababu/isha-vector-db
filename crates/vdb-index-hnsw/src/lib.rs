@@ -194,10 +194,16 @@ impl VectorIndex for HnswIndex {
         }
 
         let mut guard = self.graph.write().unwrap_or_else(|e| e.into_inner());
-        // Another thread may have built it while this one was working. Both graphs are identical
-        // — construction is deterministic — so either is correct; this simply avoids discarding
-        // the newer one.
-        if !guard.is_valid_for(rows, dimension, metric) {
+        // Another thread may have finished while this one was working, and what it produced can
+        // be *newer* than this: writes keep arriving, so a graph built for N rows must never
+        // replace one that already covers N+5. An earlier version of this checked only
+        // `is_valid_for(rows, ..)`, which is false for the newer graph too, and therefore
+        // overwrote it — the losing thread's stale graph won.
+        let keep_existing = guard.is_valid_for(rows, dimension, metric)
+            || (guard.metric == Some(metric)
+                && guard.dimension == dimension
+                && guard.len() > graph.len());
+        if !keep_existing {
             *guard = graph;
         }
         Ok(())
