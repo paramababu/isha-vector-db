@@ -50,6 +50,11 @@ pub use document::{DocId, Document, DocumentInput, IdKind, Include, RowId};
 pub use error::{DbError, ErrorCode, Recoverability, Result};
 pub use filter::{Field, Filter};
 pub use metadata::{Metadata, Value};
+// Re-exported at the root because constructing a `CollectionSpec` needs them, and requiring
+// callers to reach into `vdb_format` for the type of a public API field would leak a crate they
+// should never have to name.
 pub use path::DbPath;
 pub use persistence::Durability;
+pub use search::Metric;
+pub use vdb_format::{IndexSpec, MAX_DIMENSION};
 pub use vector::{VectorDType, VectorView};

@@ -65,6 +65,11 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
   into `SearchRequest`. Evaluation is total — a type mismatch is `false`, never an error — and
   the rules are documented in `docs/api/filters.md`. `top_k` counts matches rather than
   candidates, and `SearchStats` reports selectivity.
+- **`vdb-storage-os`**: the filesystem backend. Positional I/O with short-read/short-write
+  loops, `F_FULLFSYNC` on Darwin (where plain `fsync` does not flush the device cache),
+  directory syncing so a rename is durable, and `flock`-based advisory locking that the kernel
+  releases when a process dies. Passes the same conformance suite as the in-memory backend,
+  unchanged, and runs the crash sweep against a real disk.
 - CI: `ci-format` refuses a golden-fixture change without a declared `FORMAT-CHANGE:` and a
   `FORMAT_VERSION` bump; `nightly` runs each fuzz target for an hour and reports coverage.
 

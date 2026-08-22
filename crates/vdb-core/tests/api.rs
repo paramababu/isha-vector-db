@@ -679,3 +679,38 @@ fn u64_ids_work_end_to_end() {
     assert_eq!(c.count().unwrap(), 1);
     db.close().unwrap();
 }
+
+/// The other half of the empty-slot fix: treating an empty slot as "no database" must never let
+/// the engine create a fresh manifest over collections that already exist. Losing a 200-byte
+/// manifest is recoverable; silently orphaning every document because of it is not.
+#[test]
+fn a_missing_manifest_over_existing_collections_is_reported_not_overwritten() {
+    let mem = MemoryStorage::new();
+    {
+        let db = open(Arc::new(mem.clone()));
+        let c = db.create_collection(spec("docs")).unwrap();
+        insert(&c, "precious", 1.0);
+        c.flush().unwrap();
+        db.close().unwrap();
+    }
+    // Lose both manifest slots, as a botched backup or a partial copy would.
+    for slot in ["MANIFEST-A", "MANIFEST-B"] {
+        let path = vdb_core::path::DbPath::parse(slot).unwrap();
+        if mem.exists(&path).unwrap() {
+            mem.remove_file(&path).unwrap();
+        }
+    }
+
+    match Database::open(Arc::new(mem.clone()), DatabaseConfig::default(), clock()) {
+        Err(e) => {
+            assert!(e.is_corruption(), "expected corruption, got {e}");
+            assert!(e.to_string().contains("collections"), "{e}");
+        }
+        Ok(db) => panic!(
+            "created a fresh database over existing data: {:?}",
+            db.list_collections().unwrap()
+        ),
+    }
+    // The data is still on disk, which is the whole point of refusing.
+    assert!(mem.file_paths().iter().any(|p| p.contains("docs")));
+}

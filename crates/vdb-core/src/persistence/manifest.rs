@@ -127,6 +127,18 @@ fn read_slot(storage: &dyn Storage, slot: Slot) -> Result<Option<Vec<u8>>> {
     let Some(meta) = storage.metadata(&path)? else {
         return Ok(None);
     };
+    // A zero-length slot is *absent*, not corrupt. A slot is written as truncate-then-write, so
+    // a crash between the two leaves an empty file — and on a real filesystem, creating a file
+    // and dying before writing to it is an ordinary outcome. Reporting that as corruption made
+    // a database that had not finished its very first commit permanently unopenable.
+    //
+    // Safe because a commit never targets the authoritative slot: the slot we would fall back
+    // to is never the one being truncated. And `Database::open` separately refuses to create a
+    // fresh database over a directory that already holds collections, so an empty slot can
+    // never be the reason existing data is silently orphaned.
+    if meta.len == 0 {
+        return Ok(None);
+    }
     let file = storage.open_file(&path, OpenMode::Read)?;
     let mut bytes = vec![0u8; meta.len as usize];
     let read = file.read_at(&mut bytes, 0)?;

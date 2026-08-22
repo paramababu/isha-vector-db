@@ -168,3 +168,27 @@ fn a_shrinking_manifest_does_not_leave_a_stale_tail() {
     );
     assert!(ManifestStore::load(&mem).unwrap().is_some());
 }
+
+/// Regression, found by running the crash sweep against a real filesystem: a slot is written as
+/// truncate-then-write, so a crash between the two leaves a zero-length file. Reading that as
+/// corruption made a database that had not finished its first commit permanently unopenable.
+#[test]
+fn a_zero_length_slot_is_absent_rather_than_corrupt() {
+    let mem = MemoryStorage::new();
+    mem.write_all(&layout::manifest(Slot::A).unwrap(), vec![]);
+    assert!(
+        ManifestStore::load(&mem).unwrap().is_none(),
+        "an empty slot should look like no database at all"
+    );
+
+    let scan = ManifestStore::scan(&mem).unwrap();
+    assert_eq!(scan.a, SlotStatus::Missing);
+    assert_eq!(scan.next_slot(), Slot::A);
+
+    // And a real manifest alongside an empty slot still loads.
+    let mut store = ManifestStore::create(&mem, UUID, 1000).unwrap();
+    let next = store.current().clone();
+    store.commit(&mem, next, 2000).unwrap();
+    mem.write_all(&layout::manifest(Slot::A).unwrap(), vec![]);
+    assert_eq!(ManifestStore::load(&mem).unwrap().unwrap().slot(), Slot::B);
+}

@@ -60,7 +60,8 @@ Nothing at or below the public API knows which platform it is on. That is enforc
 | `Database`/`Collection` public API, CRUD, batches | Done |
 | Search: metrics, top-K, exact scan | Done |
 | Metadata filters | Done |
-| `vdb-storage-os`: the real filesystem backend | Next |
+| `vdb-storage-os`: the real filesystem backend | Done |
+| CLI, benchmarks, then the C ABI | Next |
 | `vdb-index-flat`, search, filters | Not started |
 | `vdb-storage-os` | Not started |
 | C ABI, SDKs, HNSW, web | Later phases |
@@ -73,10 +74,10 @@ Roadmap and ordering: [docs/architecture/11-roadmap-risks-order.md](docs/archite
 use std::sync::Arc;
 use vdb_core::{Database, DatabaseConfig, CollectionSpec, DocumentInput, ManualClock};
 use vdb_core::vector::VectorView;
-use vdb_storage_memory::MemoryStorage;
+use vdb_storage_os::OsStorage;
 
 let db = Database::open(
-    Arc::new(MemoryStorage::new()),   // or the OS backend, once it lands
+    Arc::new(OsStorage::open("/path/to/db")?),   // or MemoryStorage for tests
     DatabaseConfig::default(),
     Arc::new(ManualClock::default()),
 )?;

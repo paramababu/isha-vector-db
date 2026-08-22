@@ -9,7 +9,7 @@ use vdb_format::{Catalog, CollectionEntry, Manifest};
 use crate::api::collection::{CollInner, Collection};
 use crate::api::{CollectionSpec, DatabaseConfig, DatabaseStats};
 use crate::clock::Clock;
-use crate::error::{ConflictError, LifecycleError, NotFoundError, Result};
+use crate::error::{ConflictError, CorruptionError, LifecycleError, NotFoundError, Result};
 use crate::persistence::segment::{read_catalog, write_catalog};
 use crate::persistence::{layout, ManifestStore};
 use crate::storage::{FileLock, Storage};
@@ -125,7 +125,21 @@ impl Database {
                     }
                     .into());
                 }
-                storage.create_dir_all(&layout::collections_dir()?)?;
+                // Both manifest slots are gone but collections are on disk: that is a damaged
+                // database, not an empty directory. Creating a fresh manifest here would
+                // present the user with an empty database and orphan everything they had, which
+                // is the worst possible response to losing a 200-byte file.
+                let collections = layout::collections_dir()?;
+                if storage.exists(&collections)? && !storage.list_dir(&collections)?.is_empty() {
+                    let scan = ManifestStore::scan(storage.as_ref())?;
+                    return Err(CorruptionError::NoValidManifest {
+                        path: collections,
+                        slot_a: scan.a.describe(),
+                        slot_b: scan.b.describe(),
+                    }
+                    .into());
+                }
+                storage.create_dir_all(&collections)?;
                 let uuid = new_uuid(clock.as_ref());
                 ManifestStore::create(storage.as_ref(), uuid, clock.now_ms())?
             }
