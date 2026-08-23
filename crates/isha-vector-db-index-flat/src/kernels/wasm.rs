@@ -4,8 +4,15 @@
 //! add are issued separately. The gain over scalar is correspondingly smaller than on native
 //! targets — worth having, but not the same order.
 //!
-//! Built only when `simd128` is enabled at compile time. There is no runtime detection in
-//! WebAssembly, so `@isha-vector-db/web` ships two modules and selects between them at load time.
+//! Built only when `simd128` is enabled at compile time, because WebAssembly has no runtime
+//! feature detection — a module either contains the instructions or it does not.
+//!
+//! **The module `scripts/build-web.sh` produces does not enable it**, so the shipped web SDK runs
+//! the scalar kernels. Turning it on is one `RUSTFLAGS` away and `simd128` is supported by every
+//! browser that supports OPFS, so it is very likely worth doing; it is not done yet because
+//! nothing has measured it on a browser, and this project does not claim a speed-up it has not
+//! measured. An earlier version of this comment claimed the SDK shipped two modules and chose
+//! between them at load time. It never did.
 
 use core::arch::wasm32::{
     f32x4_add, f32x4_extract_lane, f32x4_mul, f32x4_splat, f32x4_sub, v128, v128_load,

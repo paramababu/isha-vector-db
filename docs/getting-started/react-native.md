@@ -17,7 +17,7 @@
 ## Install
 
 ```bash
-npm install @isha-vector-db/react-native
+npm install @isais-logic/isha-vector-db-react-native
 cd ios && pod install        # iOS only
 ```
 
@@ -30,7 +30,7 @@ if you forget.
 ## Your first database
 
 ```js
-import { open, Metric } from '@isha-vector-db/react-native';
+import { open, Metric } from '@isais-logic/isha-vector-db-react-native';
 import RNFS from 'react-native-fs';
 
 const db = open(`${RNFS.DocumentDirectoryPath}/notes`);

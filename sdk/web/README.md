@@ -1,10 +1,10 @@
-# @isha-vector-db/web
+# @isais-logic/isha-vector-db-web
 
 The same engine, compiled to WebAssembly, storing in the Origin Private File System.
 
 ```js
-import { load, Metric } from '@isha-vector-db/web';
-import { opfsAdapter } from '@isha-vector-db/web/adapters/opfs.js';
+import { load, Metric } from '@isais-logic/isha-vector-db-web';
+import { opfsAdapter } from '@isais-logic/isha-vector-db-web/adapters/opfs.js';
 
 const adapter = await opfsAdapter('my-app');
 const vdb = await load(fetch('/vdb.wasm'), adapter);

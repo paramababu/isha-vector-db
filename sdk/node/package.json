@@ -1,5 +1,5 @@
 {
-  "name": "@isha-vector-db/node",
+  "name": "@isais-logic/isha-vector-db-node",
   "version": "0.1.0",
   "description": "An embedded, offline-first vector database for Node.js.",
   "license": "Apache-2.0",
@@ -19,10 +19,10 @@
     "test": "node --test test/api.test.js"
   },
   "optionalDependencies": {
-    "@isha-vector-db/node-darwin-arm64": "0.1.0",
-    "@isha-vector-db/node-darwin-x64": "0.1.0",
-    "@isha-vector-db/node-linux-x64": "0.1.0",
-    "@isha-vector-db/node-linux-arm64": "0.1.0",
-    "@isha-vector-db/node-win32-x64": "0.1.0"
+    "@isais-logic/isha-vector-db-node-darwin-arm64": "0.1.0",
+    "@isais-logic/isha-vector-db-node-darwin-x64": "0.1.0",
+    "@isais-logic/isha-vector-db-node-linux-x64": "0.1.0",
+    "@isais-logic/isha-vector-db-node-linux-arm64": "0.1.0",
+    "@isais-logic/isha-vector-db-node-win32-x64": "0.1.0"
   }
 }

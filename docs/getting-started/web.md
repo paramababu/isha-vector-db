@@ -6,7 +6,7 @@ the user's device; nothing is uploaded.
 ## Install
 
 ```bash
-npm install @isha-vector-db/web
+npm install @isais-logic/isha-vector-db-web
 ```
 
 > **Not published yet.** Build from a checkout for now — see below, and
@@ -16,7 +16,7 @@ You also need to serve `vdb.wasm` (366 KB) as a static asset. Most bundlers hand
 import:
 
 ```js
-import wasmUrl from '@isha-vector-db/web/vdb.wasm?url';        // Vite
+import wasmUrl from '@isais-logic/isha-vector-db-web/vdb.wasm?url';        // Vite
 ```
 
 ## Run it in a Worker — this is not optional
@@ -30,8 +30,8 @@ Two reasons, and the first is a hard requirement:
 `worker.js`:
 
 ```js
-import { load, Metric } from '@isha-vector-db/web';
-import { opfsAdapter } from '@isha-vector-db/web/adapters/opfs.js';
+import { load, Metric } from '@isais-logic/isha-vector-db-web';
+import { opfsAdapter } from '@isais-logic/isha-vector-db-web/adapters/opfs.js';
 
 let notes;
 
@@ -116,7 +116,7 @@ synchronously, so they must exist before the engine runs. Raise it if you see
 restricted:
 
 ```js
-import { indexedDbAdapter } from '@isha-vector-db/web/adapters/indexeddb.js';
+import { indexedDbAdapter } from '@isais-logic/isha-vector-db-web/adapters/indexeddb.js';
 const adapter = await indexedDbAdapter('my-app');
 ```
 

@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * @isha-vector-db/node — an embedded, offline-first vector database.
+ * @isais-logic/isha-vector-db-node — an embedded, offline-first vector database.
  *
  * A thin layer over the native addon. It exists for two reasons, both of which would otherwise
  * have to be solved four times over in four bindings:
@@ -24,7 +24,7 @@ const native = loadAddon();
 /**
  * Find the native addon.
  *
- * A published install gets it from a platform package — `@isha-vector-db/node-darwin-arm64` and
+ * A published install gets it from a platform package — `@isais-logic/isha-vector-db-node-darwin-arm64` and
  * friends — declared as optional dependencies with `os` and `cpu` constraints, so npm downloads
  * only the one that matches. That is the pattern esbuild and swc use, and it exists because the
  * alternative is either a single package carrying every platform's binary (tens of megabytes for
@@ -43,7 +43,7 @@ function loadAddon() {
 
   const platform = `${process.platform}-${process.arch}`;
   try {
-    return require(`@isha-vector-db/node-${platform}`);
+    return require(`@isais-logic/isha-vector-db-node-${platform}`);
   } catch (cause) {
     throw new Error(
       `no isha-vector-db native addon for ${platform}. ` +

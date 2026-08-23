@@ -15,8 +15,8 @@ things that go wrong on that platform specifically.
 
 ```bash
 pip install vdb                 # Python
-npm install @isha-vector-db/node           # Node.js
-npm install @isha-vector-db/web            # browsers
+npm install @isais-logic/isha-vector-db-node           # Node.js
+npm install @isais-logic/isha-vector-db-web            # browsers
 ```
 
 Think SQLite, not Milvus: a library your application links against to keep vectors and metadata
@@ -81,7 +81,7 @@ Nothing at or below the public API knows which platform it is on. That is enforc
 | Benchmark harness and committed baseline | Done |
 | SIMD kernels (NEON, AVX2, simd128) | Done |
 | C ABI (`vdb.h`), frozen and guarded | Done |
-| Node SDK (`@isha-vector-db/node`) | Done |
+| Node SDK (`@isais-logic/isha-vector-db-node`) | Done |
 | Android SDK (JNI + Java API) | Done |
 | iOS SDK (Swift + XCFramework) | Done |
 | Metadata filters across the C ABI and Swift | Done |
@@ -157,7 +157,7 @@ cd sdk/node && npm test
 ```
 
 ```js
-const vdb = require('@isha-vector-db/node');
+const vdb = require('@isais-logic/isha-vector-db-node');
 
 using db = vdb.open('/path/to/db');
 const docs = db.collection('docs', { dimension: 384, metric: 'cosine' });

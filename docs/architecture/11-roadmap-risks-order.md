@@ -87,7 +87,7 @@ are validated earliest.
 oversampling and the flat fallback. **0.4.**
 
 **Phase 4 — Web.** 31. `vdb-storage-opfs` against the conformance suite, 32. `vdb-wasm` + worker
-RPC + `@isha-vector-db/web`, 33. IndexedDB fallback, 34. browser e2e matrix. **0.5.**
+RPC + `@isais-logic/isha-vector-db-web`, 33. IndexedDB fallback, 34. browser e2e matrix. **0.5.**
 
 **Phase 5 — 1.0.** 35. Rehearse a v1→v2 migration end to end (even if v2 is a trivial change) to
 prove `MigrationManager` works before anyone needs it. 36. API review and freeze. 37. Documentation
