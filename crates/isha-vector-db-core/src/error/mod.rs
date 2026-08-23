@@ -1216,7 +1216,11 @@ mod tests {
         match &e {
             DbError::Internal(i) => {
                 assert!(i.message.contains("segment 3"));
-                assert!(i.location.contains("error/mod.rs"), "{}", i.location);
+                // Separator-agnostic: `file!()` yields backslashes on Windows, so a literal
+                // "error/mod.rs" matches nothing there. Asserting the two components
+                // independently checks the same thing on every platform.
+                assert!(i.location.contains("error"), "{}", i.location);
+                assert!(i.location.contains("mod.rs"), "{}", i.location);
             }
             other => panic!("expected Internal, got {other:?}"),
         }
