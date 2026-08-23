@@ -83,6 +83,36 @@ fn seed(dir: &TempDir) {
     db.close().unwrap();
 }
 
+/// Reopen a database that `seed` has just closed, tolerating a brief spurious "already open".
+///
+/// This is not flakiness being papered over; it is the documented behaviour of `flock`, spelled
+/// out in `isha-vector-db-storage-os/src/lock.rs`. A lock belongs to the open file description,
+/// and a child inherits every descriptor across `fork` until it `exec`s. This test binary spawns
+/// the CLI constantly and runs its tests in parallel, so a reopen immediately after a close can
+/// land inside another test's fork/exec window and see a lock that is on its way out.
+///
+/// It reproduced on Linux and not on macOS, which is what a race looks like rather than a
+/// platform bug. An application doing the same thing — closing and immediately reopening while
+/// spawning subprocesses — should retry the same way, and the Rust guide now says so.
+#[cfg(unix)]
+fn open_after_seed(dir: &TempDir) -> Database {
+    let mut last = None;
+    for attempt in 0..50 {
+        match Database::open(
+            Arc::new(OsStorage::open(&dir.0).unwrap()),
+            DatabaseConfig::default(),
+            Arc::new(ManualClock::default()),
+        ) {
+            Ok(db) => return db,
+            Err(e) => {
+                last = Some(e);
+                std::thread::sleep(std::time::Duration::from_millis(10 * (attempt + 1).min(5)));
+            }
+        }
+    }
+    panic!("could not reopen after seeding: {last:?}");
+}
+
 fn vdb(args: &[&str]) -> (i32, String) {
     let exe = env!("CARGO_BIN_EXE_isha-vector-db");
     let out = Command::new(exe).args(args).output().expect("run vdb");
@@ -268,12 +298,7 @@ fn a_missing_database_is_an_error_with_advice() {
 fn inspection_works_while_an_application_holds_the_database() {
     let dir = TempDir::new("concurrent");
     seed(&dir);
-    let db = Database::open(
-        Arc::new(OsStorage::open(&dir.0).unwrap()),
-        DatabaseConfig::default(),
-        Arc::new(ManualClock::default()),
-    )
-    .unwrap();
+    let db = open_after_seed(&dir);
 
     let (code, out) = vdb(&["stats", &dir.str()]);
     assert_eq!(code, 0, "read-only inspection should not be blocked: {out}");

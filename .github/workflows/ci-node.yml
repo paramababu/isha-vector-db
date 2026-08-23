@@ -13,7 +13,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
         # N-API is ABI-stable across Node majors, which is the whole reason for choosing it.
         # Testing the ends of the supported range is what turns that into a claim we can make.
-        node: [18, 22]
+        node: [20, 24]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -36,10 +36,15 @@ jobs:
         with:
           node-version: 22
       - run: ./scripts/build-node.sh
-      - name: The same binary under 18, 20 and 22
+      - name: The same binary under 20, 22 and 24
         run: |
-          for v in 18 20 22; do
+          # An explicit file, not a glob and not a directory. `--test <glob>` needs Node 21, and
+          # `--test <dir>` is rejected by Node 24 — so a job whose entire purpose is to run three
+          # Node versions must use the one form all of them accept. This job previously used a
+          # glob and failed on 18 for that reason. Node 18 is EOL and no longer supported: the SDK uses
+          # Symbol.dispose, which needs Node 20.
+          for v in 20 22 24; do
             echo "--- node $v ---"
-            npx --yes node@$v --test "test/**/*.test.js"
+            npx --yes node@$v --test test/api.test.js
           done
         working-directory: sdk/node

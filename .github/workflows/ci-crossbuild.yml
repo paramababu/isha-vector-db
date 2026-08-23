@@ -43,4 +43,11 @@ jobs:
       - uses: actions/checkout@v4
       - run: rustup target add ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --workspace --target ${{ matrix.target }}
+      # The Node addon and the JNI shim are host bindings: napi links against the Node runtime
+      # and jni against a JVM, and neither exists on a phone. Building them for iOS fails at the
+      # link step with undefined `_napi_*` symbols, which is what this job hit the first time it
+      # ran. What the job is actually for is proving the *engine* cross-compiles.
+      - run: |
+          cargo build --workspace --target ${{ matrix.target }} \
+            --exclude isha-vector-db-node \
+            --exclude isha-vector-db-jni

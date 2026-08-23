@@ -19,7 +19,40 @@
  * knows how big its collections are.
  */
 
-const native = require('./vdb.node');
+const native = loadAddon();
+
+/**
+ * Find the native addon.
+ *
+ * A published install gets it from a platform package — `@isha-vector-db/node-darwin-arm64` and
+ * friends — declared as optional dependencies with `os` and `cpu` constraints, so npm downloads
+ * only the one that matches. That is the pattern esbuild and swc use, and it exists because the
+ * alternative is either a single package carrying every platform's binary (tens of megabytes for
+ * everyone) or a compile at install time (a Rust toolchain on every machine).
+ *
+ * A checkout gets it from `./vdb.node`, where `scripts/build-node.sh` puts it.
+ *
+ * The error when neither is present names the platform, because "cannot find module" sends
+ * people looking for a typo rather than an unsupported target.
+ */
+function loadAddon() {
+  const local = require('node:path').join(__dirname, 'vdb.node');
+  if (require('node:fs').existsSync(local)) {
+    return require(local);
+  }
+
+  const platform = `${process.platform}-${process.arch}`;
+  try {
+    return require(`@isha-vector-db/node-${platform}`);
+  } catch (cause) {
+    throw new Error(
+      `no isha-vector-db native addon for ${platform}. ` +
+        'Supported: darwin-arm64, darwin-x64, linux-x64, linux-arm64, win32-x64. ' +
+        'From a checkout, run scripts/build-node.sh first.',
+      { cause },
+    );
+  }
+}
 
 /**
  * The engine's stable numeric code, recovered from the message.

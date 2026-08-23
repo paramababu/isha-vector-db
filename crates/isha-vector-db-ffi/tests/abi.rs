@@ -471,6 +471,14 @@ fn engine_errors_carry_their_code_and_message() {
     unsafe { vdb_close(db, &mut err) };
 }
 
+/// Unix only, because the guarantee is unix only.
+///
+/// `OsStorage` locks with `flock`, which Windows does not have, so it reports
+/// `file_locking: false` there and the engine opens without a lock rather than refusing to run
+/// at all. A second open therefore succeeds on Windows. That is a real difference in what the
+/// platform can promise, not something to assert away — `capabilities().file_locking` and
+/// `DatabaseStats` both report it, and the getting-started pages say so.
+#[cfg(unix)]
 #[test]
 fn opening_the_same_database_twice_is_refused_with_a_usable_error() {
     let dir = TempDir::new("lock");

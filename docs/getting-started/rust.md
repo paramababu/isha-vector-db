@@ -154,6 +154,14 @@ match notes.upsert(document) {
 **One handle per database.** `Database::open` takes an advisory lock; a second open in the same or
 another process fails with `DatabaseAlreadyOpen`.
 
+**Closing and immediately reopening can briefly fail if you also spawn subprocesses.** The lock is
+an `flock`, which belongs to the open file description, and a child inherits every descriptor
+across `fork` until it `exec`s. So a reopen that lands inside that window sees a lock that is on
+its way out and reports `DatabaseAlreadyOpen`. It is a race, not a leak — retrying for a few tens
+of milliseconds is the right response, and this project's own CLI test suite does exactly that.
+The alternatives to `flock` are worse: `fcntl` locks are released by closing *any* descriptor for
+the file, which breaks far more surprisingly.
+
 **`DatabaseConfig` is `#[non_exhaustive]`.** Use the builders, not a struct literal — that is
 deliberate, so that adding a field later is not a breaking change.
 

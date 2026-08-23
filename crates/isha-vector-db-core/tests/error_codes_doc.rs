@@ -84,7 +84,11 @@ fn the_published_table_matches_the_code() {
         )
     });
 
-    if committed == generated {
+    // Compared line by line, not byte for byte. `.gitattributes` pins this file to LF, but a
+    // checkout can still be configured to rewrite line endings, and a table that is correct in
+    // every line should not fail its own drift check over a carriage return. On Windows it did
+    // exactly that: every line matched and the raw strings did not.
+    if committed.lines().eq(generated.lines()) {
         return;
     }
     let first_diff = committed

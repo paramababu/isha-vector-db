@@ -137,7 +137,17 @@ impl Database {
         // Read-only handles take no lock, so a second process can inspect a database while an
         // application has it open. That is genuinely useful for debugging and cannot corrupt
         // anything, because a read-only handle never writes.
-        let lock = if config.read_only {
+        //
+        // Nor does a backend that cannot lock. `file_locking` is false on Windows, where there
+        // is no `flock`, and on backends where locks are unreliable — and a backend saying "I
+        // cannot do this" must not be read as "someone else has it". Treating the two the same
+        // made every `open` on Windows fail with `DatabaseAlreadyOpen`, which is to say the
+        // engine did not run on Windows at all.
+        //
+        // The cost is that concurrent opens are not prevented there. That is what
+        // `capabilities().file_locking` reports, and `DatabaseStats` passes it on, so an
+        // application can see the weaker guarantee rather than be surprised by it.
+        let lock = if config.read_only || !storage.capabilities().file_locking {
             None
         } else {
             match storage.try_lock(&layout::lock()?) {

@@ -39,7 +39,7 @@ impl WalWriter {
     /// highest sequence it replayed, so numbering stays monotonic across restarts.
     ///
     /// # Errors
-    /// Any [`StorageError`](crate::error::StorageError).
+    /// Any [`StorageError`].
     pub fn open(
         storage: &dyn Storage,
         path: &DbPath,

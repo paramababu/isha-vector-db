@@ -154,8 +154,11 @@ pub(crate) fn sync_directory(path: &Path) -> io::Result<()> {
         if meta.is_dir() {
             Ok(())
         } else {
+            // `ErrorKind::NotADirectory` would say this precisely and is stable only since
+            // 1.83, five releases past this crate's MSRV. `InvalidInput` is the closest kind
+            // available at 1.78, and the message carries the detail that the kind cannot.
             Err(io::Error::new(
-                io::ErrorKind::NotADirectory,
+                io::ErrorKind::InvalidInput,
                 "not a directory",
             ))
         }

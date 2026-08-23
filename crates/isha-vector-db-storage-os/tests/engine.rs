@@ -25,6 +25,9 @@ use isha_vector_db_core::api::{
 };
 use isha_vector_db_core::clock::ManualClock;
 use isha_vector_db_core::document::{DocId, DocumentInput, Include};
+// Only the lock test uses these, and that test is unix-only — so on Windows the import is
+// unused, which is an error under `-D warnings`.
+#[cfg(unix)]
 use isha_vector_db_core::error::{DbError, LifecycleError};
 use isha_vector_db_core::filter::Filter;
 use isha_vector_db_core::metadata::{Metadata, Value};
