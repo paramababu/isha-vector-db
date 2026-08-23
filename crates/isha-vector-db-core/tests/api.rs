@@ -714,3 +714,102 @@ fn a_missing_manifest_over_existing_collections_is_reported_not_overwritten() {
     // The data is still on disk, which is the whole point of refusing.
     assert!(mem.file_paths().iter().any(|p| p.contains("docs")));
 }
+
+/// A backend that cannot lock must still open, not report the database as already open.
+///
+/// Windows has no `flock`, so `OsStorage` reports `file_locking: false` there and its `try_lock`
+/// returns `Unsupported`. The open path used to treat every lock error alike, so "this backend
+/// cannot lock" became "somebody else has it" — and the engine did not open a single database on
+/// Windows. It took the first real CI run to find, because nothing here compiles that path.
+#[test]
+fn a_backend_that_cannot_lock_still_opens() {
+    /// A backend that is honest about having no locking, as `OsStorage` is off unix.
+    #[derive(Debug)]
+    struct Unlockable(MemoryStorage);
+
+    impl Storage for Unlockable {
+        fn name(&self) -> &'static str {
+            "unlockable"
+        }
+        fn capabilities(&self) -> isha_vector_db_core::storage::StorageCapabilities {
+            self.0.capabilities().with_file_locking(false)
+        }
+        fn try_lock(
+            &self,
+            _path: &isha_vector_db_core::path::DbPath,
+        ) -> isha_vector_db_core::Result<Box<dyn isha_vector_db_core::storage::FileLock>> {
+            Err(isha_vector_db_core::error::StorageError::Unsupported {
+                operation: isha_vector_db_core::error::StorageOp::Lock,
+                backend: "unlockable",
+            }
+            .into())
+        }
+        fn open_file(
+            &self,
+            path: &isha_vector_db_core::path::DbPath,
+            mode: isha_vector_db_core::storage::OpenMode,
+        ) -> isha_vector_db_core::Result<Box<dyn isha_vector_db_core::storage::File>> {
+            self.0.open_file(path, mode)
+        }
+        fn remove_file(
+            &self,
+            p: &isha_vector_db_core::path::DbPath,
+        ) -> isha_vector_db_core::Result<()> {
+            self.0.remove_file(p)
+        }
+        fn rename(
+            &self,
+            a: &isha_vector_db_core::path::DbPath,
+            b: &isha_vector_db_core::path::DbPath,
+        ) -> isha_vector_db_core::Result<()> {
+            self.0.rename(a, b)
+        }
+        fn create_dir_all(
+            &self,
+            p: &isha_vector_db_core::path::DbPath,
+        ) -> isha_vector_db_core::Result<()> {
+            self.0.create_dir_all(p)
+        }
+        fn remove_dir_all(
+            &self,
+            p: &isha_vector_db_core::path::DbPath,
+        ) -> isha_vector_db_core::Result<()> {
+            self.0.remove_dir_all(p)
+        }
+        fn list_dir(
+            &self,
+            p: &isha_vector_db_core::path::DbPath,
+        ) -> isha_vector_db_core::Result<Vec<isha_vector_db_core::storage::DirEntry>> {
+            self.0.list_dir(p)
+        }
+        fn metadata(
+            &self,
+            p: &isha_vector_db_core::path::DbPath,
+        ) -> isha_vector_db_core::Result<Option<isha_vector_db_core::storage::FileMeta>> {
+            self.0.metadata(p)
+        }
+        fn sync_dir(
+            &self,
+            p: &isha_vector_db_core::path::DbPath,
+        ) -> isha_vector_db_core::Result<()> {
+            self.0.sync_dir(p)
+        }
+    }
+
+    let storage = Arc::new(Unlockable(MemoryStorage::new()));
+    let db = Database::open(
+        storage,
+        DatabaseConfig::default(),
+        Arc::new(ManualClock::default()),
+    )
+    .expect("a backend without locking must still open");
+
+    // And it is usable, not merely open.
+    let c = db
+        .create_collection(CollectionSpec::new("docs", 2, Metric::Cosine))
+        .unwrap();
+    c.upsert(DocumentInput::new("a", VectorView::f32(&[1.0, 0.0])))
+        .unwrap();
+    assert_eq!(c.count().unwrap(), 1);
+    db.close().unwrap();
+}

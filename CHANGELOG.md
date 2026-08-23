@@ -9,6 +9,20 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
 
 ## [Unreleased]
 
+### Fixed
+
+- **The engine could not open a database on Windows at all.** `OsStorage` reports
+  `file_locking: false` there — Windows has no `flock` — and its `try_lock` returns
+  `Unsupported`. `Database::open` treated every lock error alike, so "this backend cannot lock"
+  was reported as "somebody else has it open", and every single `open` failed with
+  `DatabaseAlreadyOpen`.
+
+  Opening now honours the declared capability, which is what the capability is for. Concurrent
+  opens are genuinely unprotected on such a backend; that is what `file_locking` reports and what
+  `DatabaseStats` passes on, so the weaker guarantee is visible rather than surprising.
+
+  Found by the first CI run that ever reached Windows.
+
 ### Changed
 
 - **CI audit.** Eleven workflows had never run, and the rename had just touched all of them.
