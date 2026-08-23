@@ -45,7 +45,8 @@ One version across the workspace, in the root `Cargo.toml`. The release workflow
 if the tag does not match it, because publishing `v0.2.0` from a tree that says `0.1.0` produces
 a release nobody can reproduce from the tag.
 
-`0.0.1` is a placeholder. `0.1.0` says "usable, and the API may still move", which is accurate.
+`0.1.0` says "usable, and the API may still move", which is accurate. It is deliberately not
+`1.0.0`: that would promise the API and the storage format are settled, and neither is.
 
 Four things are versioned separately and deliberately (see the changelog's header): the library,
 the **storage format** (an integer, currently 2), the **C ABI** (an integer, frozen at 1), and the

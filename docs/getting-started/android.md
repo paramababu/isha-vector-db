@@ -12,7 +12,7 @@ dependencyResolutionManagement {
 
 // app/build.gradle.kts
 dependencies {
-    implementation("dev.vdb:vdb-android:0.0.1")
+    implementation("dev.vdb:vdb-android:0.1.0")
 }
 ```
 

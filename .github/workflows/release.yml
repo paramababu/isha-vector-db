@@ -6,18 +6,10 @@ name: release
 on:
   push:
     tags: ["v*"]
+  # A manual run builds every artefact and publishes nothing. There is deliberately no toggle to
+  # change that: publishing is what a tag means, and a boolean someone can flip is one mistaken
+  # click away from burning a version number that can never be reused.
   workflow_dispatch:
-    inputs:
-      dry_run:
-        description: "Build and check everything, publish nothing"
-        type: boolean
-        default: true
-
-env:
-  # Set false only by a tag push. A manual run defaults to building without publishing, because
-  # a registry upload cannot be undone: PyPI and npm refuse a re-upload of the same version, and
-  # a wrong artefact means burning a version number.
-  PUBLISH: ${{ github.event_name == 'push' && 'true' || 'false' }}
 
 jobs:
   # ---------------------------------------------------------------------------

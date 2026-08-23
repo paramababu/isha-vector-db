@@ -1,6 +1,6 @@
 {
   "name": "@isha-vector-db/node-darwin-arm64",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "The isha-vector-db native addon for darwin-arm64.",
   "license": "Apache-2.0",
   "os": [

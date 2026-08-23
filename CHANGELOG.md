@@ -9,6 +9,11 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
 
 ## [Unreleased]
 
+## [0.1.0] — 2026-08-23
+
+First release. Everything below was built and tested before it; the version number is the only
+thing that changed.
+
 ### Fixed
 
 - **The engine could not open a database on Windows at all.** `OsStorage` reports

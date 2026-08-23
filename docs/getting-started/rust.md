@@ -7,9 +7,9 @@ ABI exposes.
 
 ```toml
 [dependencies]
-isha-vector-db-core = "0.0.1"
-isha-vector-db-storage-os = "0.0.1"     # the filesystem backend
-isha-vector-db-index-flat = "0.0.1"     # SIMD exact search
+isha-vector-db-core = "0.1.0"
+isha-vector-db-storage-os = "0.1.0"     # the filesystem backend
+isha-vector-db-index-flat = "0.1.0"     # SIMD exact search
 ```
 
 Rust 1.78 or newer.

@@ -14,7 +14,7 @@ or in a `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/paramababu/isha-vector-db", from: "0.0.1"),
+    .package(url: "https://github.com/paramababu/isha-vector-db", from: "0.1.0"),
 ],
 targets: [
     .target(name: "MyApp", dependencies: [.product(name: "IshaVectorDB", package: "isha-vector-db")]),

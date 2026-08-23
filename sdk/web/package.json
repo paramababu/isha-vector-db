@@ -1,6 +1,6 @@
 {
   "name": "@isha-vector-db/web",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "vdb for the web: the same engine, compiled to WebAssembly, storing in OPFS.",
   "type": "module",
   "main": "src/vdb.js",
