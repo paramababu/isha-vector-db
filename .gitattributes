@@ -1,0 +1,24 @@
+# Line endings, settled here rather than left to each contributor's git config.
+#
+# Two things in this repository are compared byte for byte: the golden format fixtures, and the
+# generated error-code table. A checkout that rewrites line endings breaks both — on Windows the
+# table failed its own drift check while every line matched, which is what a CRLF conversion
+# looks like, and a converted binary fixture would be silent corruption of the thing that exists
+# to detect corruption.
+
+# Text is LF everywhere, in the working tree as well as the repository.
+* text=auto eol=lf
+
+# Byte-exact fixtures. `binary` means "never convert, never diff as text".
+testdata/** binary
+*.wasm binary
+*.node binary
+*.a binary
+*.dylib binary
+*.so binary
+*.dll binary
+*.png binary
+
+# Scripts must keep LF even on Windows, or the shebang line carries a stray carriage return and
+# the interpreter is not found.
+*.sh text eol=lf
