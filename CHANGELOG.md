@@ -34,6 +34,26 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
 
 ### Added
 
+- **A React Native SDK (`sdk/react-native`)**, over JSI rather than the legacy bridge — which
+  JSON-serialises everything, so a 768-float vector becomes a ~10 KB JSON array and for a large
+  batch insert that serialisation *is* the operation. A `Float32Array` now crosses as a pointer.
+
+  The native layer is split so that most of it can be tested off-device. A JSI `HostObject`
+  cannot be compiled outside a React Native app, so `cpp/vdb_bridge.cpp` holds all the logic —
+  handle lifetimes, error translation, use-after-close, the create-or-open fallback — in plain
+  C++ that `scripts/test-react-native.sh` compiles and runs against the real engine (56 checks).
+  `cpp/vdb_jsi.cpp` is left converting values and nothing else. The JS API adds 11 tests against
+  a mock host object.
+
+  **What that leaves unverified is stated in the SDK README rather than implied:** the JSI value
+  conversion, and the iOS and Android packaging. Nobody has built this into an app. Handles are
+  integers rather than pointers precisely so that a stale one from JavaScript fails a lookup
+  instead of being dereferenced.
+
+  Also not implemented: the dedicated C++ thread and `CallInvoker` delivery that §9.1 specifies.
+  Calls are synchronous and run on the caller's thread, which the README says plainly.
+
+
 - **A graph index (`vdb-index-hnsw`), Phase 3.** Approximate nearest neighbours over a
   hierarchical navigable small world graph, supplied to `Database::open_with_index` exactly as
   the flat index is, so `vdb-core` still knows nothing about it

@@ -1,0 +1,15 @@
+{
+  "name": "@vdb/react-native",
+  "version": "0.0.1",
+  "description": "vdb for React Native: the embedded vector database, over JSI.",
+  "type": "module",
+  "main": "src/index.js",
+  "files": ["src", "cpp", "ios", "android", "vdb.podspec", "README.md"],
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "peerDependencies": {
+    "react-native": ">=0.73.0"
+  },
+  "license": "Apache-2.0"
+}

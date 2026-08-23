@@ -19,7 +19,7 @@ answer belongs in an ADR.
 | 0008 | `score` is always higher-is-better; ties break on DocId | Accepted | [04 §4.3](../architecture/04-core-interfaces.md#43-search) |
 | 0009 | One hand-written C ABI as the single interop contract | Accepted | [09 §9.0](../architecture/09-platform-bindings.md#90-the-c-abi-one-contract-six-consumers) |
 | 0010 | OPFS primary, IndexedDB fallback, engine in a Worker | Accepted; both built and browser-verified | [09 §9.6](../architecture/09-platform-bindings.md#96-web--wasm), [sdk/web](../../sdk/web/README.md) |
-| 0011 | React Native: JSI/TurboModules, New Architecture only; Nitro to be evaluated | Proposed | [09 §9.1](../architecture/09-platform-bindings.md#91-react-native) |
+| 0011 | React Native: JSI/TurboModules, New Architecture only; Nitro to be evaluated | Accepted; bridge and JS layer built and tested, JSI glue and packaging unverified | [09 §9.1](../architecture/09-platform-bindings.md#91-react-native), [sdk/react-native](../../sdk/react-native/README.md) |
 | 0012 | No encryption in v1; `BlockCodec` seam reserved | Accepted | [10 §10.3](../architecture/10-ci-security-performance.md#103-security) |
 | 0013 | Deterministic ranking, architecture-dependent score ULPs, opt-in deterministic kernels | Accepted | [06 §6.3](../architecture/06-index-and-search.md#63-determinism-and-floating-point--the-subtle-part) |
 | 0014 | Field offset table in maps of eight fields or more (format v2) | Accepted | [ADR-0014](0014-metadata-offset-table.md) |
