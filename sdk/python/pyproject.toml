@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "isha-vector-db"
-version = "0.0.1"
+version = "0.1.0"
 description = "An embedded, offline-first vector database. No server, no dependencies."
 readme = "README.md"
 requires-python = ">=3.9"

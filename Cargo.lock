@@ -66,7 +66,7 @@ dependencies = [
 
 [[package]]
 name = "isha-vector-db-bench"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "isha-vector-db-core",
  "isha-vector-db-index-flat",
@@ -79,7 +79,7 @@ dependencies = [
 
 [[package]]
 name = "isha-vector-db-cli"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "isha-vector-db-core",
  "isha-vector-db-format",
@@ -88,7 +88,7 @@ dependencies = [
 
 [[package]]
 name = "isha-vector-db-core"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "isha-vector-db-format",
  "isha-vector-db-storage-memory",
@@ -98,7 +98,7 @@ dependencies = [
 
 [[package]]
 name = "isha-vector-db-ffi"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "isha-vector-db-core",
  "isha-vector-db-format",
@@ -109,11 +109,11 @@ dependencies = [
 
 [[package]]
 name = "isha-vector-db-format"
-version = "0.0.1"
+version = "0.1.0"
 
 [[package]]
 name = "isha-vector-db-index-flat"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "isha-vector-db-core",
  "isha-vector-db-testkit",
@@ -121,7 +121,7 @@ dependencies = [
 
 [[package]]
 name = "isha-vector-db-index-hnsw"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "isha-vector-db-core",
  "isha-vector-db-index-flat",
@@ -131,7 +131,7 @@ dependencies = [
 
 [[package]]
 name = "isha-vector-db-jni"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "isha-vector-db-core",
  "isha-vector-db-index-flat",
@@ -141,7 +141,7 @@ dependencies = [
 
 [[package]]
 name = "isha-vector-db-node"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "isha-vector-db-core",
  "isha-vector-db-index-flat",
@@ -153,7 +153,7 @@ dependencies = [
 
 [[package]]
 name = "isha-vector-db-storage-memory"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "isha-vector-db-core",
  "isha-vector-db-testkit",
@@ -161,7 +161,7 @@ dependencies = [
 
 [[package]]
 name = "isha-vector-db-storage-os"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "isha-vector-db-core",
  "isha-vector-db-testkit",
@@ -170,7 +170,7 @@ dependencies = [
 
 [[package]]
 name = "isha-vector-db-storage-web"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "isha-vector-db-core",
  "isha-vector-db-testkit",
@@ -178,7 +178,7 @@ dependencies = [
 
 [[package]]
 name = "isha-vector-db-testkit"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "isha-vector-db-core",
 ]

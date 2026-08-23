@@ -1,6 +1,6 @@
 {
   "name": "@isha-vector-db/node-win32-x64",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "The isha-vector-db native addon for win32-x64.",
   "license": "Apache-2.0",
   "os": [
