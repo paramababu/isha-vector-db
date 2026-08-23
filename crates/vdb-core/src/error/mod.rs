@@ -1123,7 +1123,7 @@ mod tests {
     #[test]
     fn codes_are_unique() {
         let mut seen: HashSet<u32> = HashSet::new();
-        for (code, name) in ALL_CODES {
+        for (code, name, _) in ALL_CODES {
             assert!(
                 seen.insert(code.0),
                 "duplicate error code {} on {name}",
@@ -1134,7 +1134,7 @@ mod tests {
 
     #[test]
     fn codes_are_banded_consistently() {
-        for (code, name) in ALL_CODES {
+        for (code, name, _) in ALL_CODES {
             let band = code.band();
             assert!(
                 (1..=9).contains(&band),
@@ -1147,7 +1147,7 @@ mod tests {
     /// Every error the engine can produce must resolve to a code that exists in the table.
     #[test]
     fn every_variant_maps_to_a_registered_code() {
-        let known: HashSet<u32> = ALL_CODES.iter().map(|(c, _)| c.0).collect();
+        let known: HashSet<u32> = ALL_CODES.iter().map(|(c, _, _)| c.0).collect();
         for e in sample_of_every_variant() {
             assert!(
                 known.contains(&e.code().0),

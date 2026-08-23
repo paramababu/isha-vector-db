@@ -8,7 +8,7 @@
 //! it finds are the ones that would otherwise be found by a user losing their data on a subway
 //! platform — a crash at operation 47 of 300, in a sequence nobody would think to write by hand.
 //!
-//! Because [`MemoryStorage`](vdb_storage_memory) makes the whole sweep run without touching a
+//! Because the in-memory storage backend makes the whole sweep run without touching a
 //! disk, it finishes in seconds and executes identically on every CI runner, so it can run on
 //! every push rather than nightly. A durability suite that is too slow to run is not a
 //! durability suite.

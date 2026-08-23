@@ -16,7 +16,7 @@ Workflows are split by cost so the fast ones gate every PR and the slow ones run
 | `ci-flutter.yml` | PR touching flutter | `dart analyze`, `flutter test`, integration test on an emulator |
 | `ci-rn.yml` | PR touching react-native | build the example app for both platforms; Detox/Maestro smoke test |
 | `nightly.yml` | schedule | `cargo-fuzz` (1 h per target); miri on unsafe crates; ASAN/TSAN on the FFI; `loom`; soak test; full benchmark suite; coverage report |
-| `bench.yml` | PR label `perf` + nightly | benchmark suite on a fixed self-hosted runner; compares against `benchmarks/results/baseline.json` |
+| `bench.yml` | PR label `perf` + nightly | benchmark suite on a fixed self-hosted runner; compares against the committed baseline in `benchmarks/results/` |
 | `release.yml` | tag `v*` | build all native artifacts; assemble XCFramework + AAR; publish crates, npm packages, pub.dev, Maven Central, CocoaPods; attach checksums + SBOM + provenance; verify the changelog was updated |
 | `semver.yml` | PR to main | `cargo-semver-checks` on published crates; ABI check: the committed `vdb.h` must be regenerable and any change must bump `vdb_abi_version` |
 
@@ -46,7 +46,9 @@ Four independently versioned things, and conflating them is a classic source of 
 | **SDK package versions** | SemVer, kept in lockstep on major+minor | patch versions may diverge for SDK-only fixes |
 
 A compatibility matrix (library version × format versions readable/writable × ABI) lives in
-`docs/api/compatibility.md` and is generated, not hand-maintained.
+a compatibility table that is generated rather than hand-maintained — **planned, not built**.
+The error-code table in [`docs/api/error-codes.md`](../api/error-codes.md) is generated this way
+already and is the pattern it would follow.
 
 **API stability commitment**, stated in the README: `0.x` = the API may change, with migration
 notes each minor; `1.0` = no breaking changes to the public API or the ability to read format

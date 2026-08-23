@@ -58,7 +58,7 @@ graph TD
     CLI[vdb-cli]
   end
   subgraph sdks
-    TS[sdk/typescript]
+    TS["sdk/typescript (planned)"]
     RN[sdk/react-native]
     FL[sdk/flutter]
     AND[sdk/android]
@@ -166,7 +166,7 @@ vdb/
 | `bindings/` folded into `crates/` (`vdb-ffi`, `vdb-wasm`, `vdb-node`) and `sdk/` (JNI/ObjC shims) | `ffi`/`wasm`/`node` *are* Rust crates. The JNI and Objective-C shims are packaging artifacts of the Android/iOS SDKs and belong next to the Gradle/Xcode projects that build them, not in a separate tree that no build system owns. |
 | New crate: `vdb-format` | The on-disk format deserves its own crate, its own fuzz corpus, its own golden fixtures, and its own semver. The `migrate` tool must be able to read *old* formats without linking the current engine. Splitting it now is cheap; splitting it after v1 is not. |
 | New crate: `vdb-testkit` | Fault-injection storage and dataset generators are needed by core tests, the CLI, and the benchmarks. Without a shared crate they get copy-pasted three times. |
-| New package: `sdk/typescript` | Node, Web and React Native share one API surface and one set of docs. Only the transport differs. Three hand-written TS APIs would drift within two releases. |
+| New package: sdk/typescript (**planned, not built**) | Node, Web and React Native share one API surface and one set of docs. Only the transport differs. Three hand-written TS APIs would drift within two releases. Each SDK currently carries its own hand-written surface, which is exactly the drift this was meant to prevent. |
 | `testdata/` at repo root | Golden files are consumed by `vdb-format`, `vdb-cli` and the migration tests. Root-level makes the shared ownership obvious. |
 
 ## 3.4 Module responsibilities

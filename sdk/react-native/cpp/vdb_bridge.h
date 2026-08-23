@@ -26,7 +26,7 @@ namespace vdb {
 
 /// What went wrong, carrying the engine's own structured code.
 ///
-/// The code is the stable one from `docs/api/errors.md`, not a string an SDK invented. A caller
+/// The code is the stable one from `docs/api/error-codes.md`, not a string an SDK invented. A caller
 /// that wants to branch on "collection not found" can, in every language binding, on the same
 /// number.
 struct Error {

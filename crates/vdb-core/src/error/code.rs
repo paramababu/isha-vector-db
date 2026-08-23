@@ -20,6 +20,29 @@ impl ErrorCode {
     }
 }
 
+impl ErrorCode {
+    /// What this code's band means, for grouping in documentation and in a caller's own
+    /// classification.
+    ///
+    /// Derived from the band rather than listed per code, because the bands are the contract:
+    /// a caller that does not recognise a specific code can still tell storage trouble from a
+    /// validation mistake.
+    pub const fn band_name(self) -> &'static str {
+        match self.band() {
+            1 => "configuration",
+            2 => "lifecycle",
+            3 => "not found",
+            4 => "conflict and validation",
+            5 => "storage",
+            6 => "corruption",
+            7 => "index and search",
+            8 => "transaction",
+            9 => "internal and resource",
+            _ => "unassigned",
+        }
+    }
+}
+
 impl fmt::Display for ErrorCode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "VDB-{:04}", self.0)
@@ -27,10 +50,16 @@ impl fmt::Display for ErrorCode {
 }
 
 macro_rules! codes {
-    ($($(#[$m:meta])* $name:ident = $v:expr;)*) => {
-        impl ErrorCode { $($(#[$m])* pub const $name: ErrorCode = ErrorCode($v);)* }
-        /// Every code, for the generated documentation table and the round-trip test.
-        pub const ALL_CODES: &[(ErrorCode, &str)] = &[$((ErrorCode($v), stringify!($name)),)*];
+    ($($(#[doc = $doc:literal])* $name:ident = $v:expr;)*) => {
+        impl ErrorCode { $($(#[doc = $doc])* pub const $name: ErrorCode = ErrorCode($v);)* }
+        /// Every code, as `(code, constant name, description)`.
+        ///
+        /// The description is the constant's own doc comment, captured by the macro rather than
+        /// written out a second time. `docs/api/error-codes.md` is generated from this, so the
+        /// published table cannot drift from the code the way a hand-maintained one does — and
+        /// three SDKs point developers at that table.
+        pub const ALL_CODES: &[(ErrorCode, &str, &str)] =
+            &[$((ErrorCode($v), stringify!($name), concat!($($doc),*)),)*];
     };
 }
 

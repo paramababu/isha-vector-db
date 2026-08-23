@@ -6,7 +6,7 @@
 //! `vdb-core` performs no I/O and knows nothing about any platform. This crate is one of its
 //! storage backends, the sibling of `vdb-storage-os`. It contains no browser code either — it
 //! calls the imports declared in [`host`], and something on the other side of the WebAssembly
-//! boundary implements them. In a browser that is `sdk/web/host.js` driving OPFS synchronous
+//! boundary implements them. In a browser that is `sdk/web/src/host.js` driving OPFS synchronous
 //! access handles inside a Worker. In tests it is a Rust implementation, which is what lets the
 //! storage conformance suite run against this translation layer natively.
 //!

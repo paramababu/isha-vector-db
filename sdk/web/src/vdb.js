@@ -15,7 +15,7 @@ export const Metric = { Cosine: 1, L2: 2, Dot: 3 };
 /** Durability levels, matching `vdb_durability_t`. `Batch` is the engine's own default. */
 export const Durability = { Full: 1, Batch: 2, Relaxed: 3 };
 
-/** Error codes this SDK reasons about. The full list is in `docs/api/errors.md`. */
+/** Error codes this SDK reasons about. The full list is in `docs/api/error-codes.md`. */
 const ERR = { COLLECTION_ALREADY_EXISTS: 4001 };
 
 /** An error carrying the engine's own structured code. */
@@ -23,7 +23,7 @@ export class VdbError extends Error {
   constructor(code, message) {
     super(message);
     this.name = 'VdbError';
-    /** The stable numeric code from `docs/api/errors.md`. */
+    /** The stable numeric code from `docs/api/error-codes.md`. */
     this.code = code;
   }
 }

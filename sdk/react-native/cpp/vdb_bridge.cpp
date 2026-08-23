@@ -33,7 +33,7 @@ Error take(std::int32_t rc, vdb_error_t* err) {
   return Error::from(code, std::move(message));
 }
 
-/// `ErrorCode::COLLECTION_ALREADY_EXISTS` from `docs/api/errors.md`.
+/// `ErrorCode::COLLECTION_ALREADY_EXISTS` from `docs/api/error-codes.md`.
 ///
 /// The one code this layer branches on, so it is named rather than left as a literal in the
 /// middle of a condition.

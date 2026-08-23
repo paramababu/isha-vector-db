@@ -48,13 +48,16 @@ uint32_t    vdb_abi_version(void);
 binding can iterate without per-hit allocation.
 
 Distributed as: `.a` static libs (iOS, Android), `.so` (Android, Linux), `.dylib`/`.a` (macOS),
-`.dll` (Windows), plus `vdb.h`. Built by `scripts/build-native.sh` and CI, per target triple,
+`.dll` (Windows), plus `vdb.h`. Built per target triple by the per-platform scripts that exist
+today — `scripts/build-xcframework.sh`, `scripts/build-android.sh`, `scripts/build-web.sh` — and
+by CI;
+a single `build-native.sh` covering every triple is planned and not written,
 with `panic=abort`, `lto=fat`, `codegen-units=1`, `strip=symbols`, and `opt-level="z"` for mobile.
 
 ## 9.1 React Native
 
 ```text
-TS API (@vdb/react-native, re-exports sdk/typescript types)
+TS API (@vdb/react-native)   [planned: re-export shared TypeScript types]
    ↓  synchronous calls for cheap ops, Promises for the rest
 JSI HostObject (C++)  ── installed by a TurboModule at startup
    ↓  zero-copy: ArrayBuffer → const float*
@@ -157,7 +160,7 @@ Vdb.xcframework  (device arm64, simulator arm64+x86_64, macOS arm64+x86_64, Cata
 ## 9.5 Node.js
 
 ```text
-TypeScript API (@vdb/node, from sdk/typescript)
+TypeScript API (@vdb/node)   [planned: shared types from sdk/typescript]
    ↓
 napi-rs addon (N-API, ABI-stable across Node majors)
    ↓
@@ -219,8 +222,8 @@ OPFS FileSystemSyncAccessHandle   (fallback: IndexedDB block store; last resort:
 
 ## 9.7 API parity across SDKs
 
-`sdk/typescript` defines the canonical API shape. A machine-readable API description
-(`docs/api/api.json`, generated from the Rust public API) drives:
+A shared sdk/typescript package (planned) would define the canonical API shape. A machine-readable API description
+(a machine-readable `api.json` generated from the Rust public API — **planned, not built**) would drive:
 
 - a **parity test** in CI asserting every SDK exposes every stable operation (or explicitly
   declares it unsupported with a reason);

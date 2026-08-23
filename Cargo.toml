@@ -41,6 +41,12 @@ missing_debug_implementations = "warn"
 unreachable_pub = "warn"
 rust_2018_idioms = { level = "warn", priority = -1 }
 
+[workspace.lints.rustdoc]
+# Documentation that points at an item which no longer exists is the same rot as a dead file
+# path, and `scripts/check-references.sh` deliberately does not police intra-doc links because
+# rustdoc already can.
+broken_intra_doc_links = "deny"
+
 [workspace.lints.clippy]
 # The rules from docs/architecture/02-technology.md §2.4, mechanically enforced.
 unwrap_used = "deny"

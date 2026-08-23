@@ -8,7 +8,7 @@
 // lets this file be tested in Node against a mock. The logic here is small but not nothing:
 // closed-handle tracking, vector conversion, the rule that a released collection cannot be used.
 
-/** An error carrying the engine's own structured code. See `docs/api/errors.md`. */
+/** An error carrying the engine's own structured code. See `docs/api/error-codes.md`. */
 export class VdbError extends Error {
   constructor(code, message) {
     super(message);

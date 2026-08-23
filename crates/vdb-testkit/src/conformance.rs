@@ -9,7 +9,8 @@
 //!
 //! - **Semantics.** Positional reads and writes, append offsets, truncation, directory handling,
 //!   error classification. These are the same for every backend.
-//! - **Declared capabilities.** If a backend claims [`StorageCapabilities::atomic_rename`], the
+//! - **Declared capabilities.** If a backend claims
+//!   [`atomic_rename`](vdb_core::storage::StorageCapabilities::atomic_rename), the
 //!   suite exercises rename and requires it to work; if it does *not* claim it, the suite
 //!   requires rename to fail with `Unsupported` rather than silently doing something non-atomic.
 //!   Claiming a capability you do not have is the failure mode that loses data in the field.

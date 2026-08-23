@@ -34,6 +34,22 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
 
 ### Added
 
+- **`docs/api/error-codes.md`, generated from the code.** Every one of the 48 codes, grouped by
+  band, with its description taken from the constant's own doc comment. A test regenerates it
+  (`VDB_BLESS=1`) and fails if the committed table disagrees with the source, so it cannot drift.
+
+  It was overdue: the C ABI, Swift and React Native SDKs all told developers to look up a code in
+  a reference that did not exist, under two different names.
+
+- **`scripts/check-references.sh`**, run in CI: every repository path cited in prose or a comment,
+  and every local Markdown link, must resolve. It found nine dead paths on its first run.
+  Documentation rot is silent — nothing fails to compile and no test goes red; a reader just finds
+  nothing there.
+
+  `rustdoc::broken_intra_doc_links` is now denied workspace-wide for the same reason, which
+  immediately turned up three broken item links.
+
+
 - **A React Native SDK (`sdk/react-native`)**, over JSI rather than the legacy bridge — which
   JSON-serialises everything, so a 768-float vector becomes a ~10 KB JSON array and for a large
   batch insert that serialisation *is* the operation. A `Float32Array` now crosses as a pointer.

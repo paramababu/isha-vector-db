@@ -18,7 +18,7 @@
 //! # Errors
 //!
 //! A function that can fail returns a non-negative value on success and one of the negative
-//! [`HostError`] codes on failure. The host never throws across the boundary: a JavaScript
+//! [`code`] values on failure. The host never throws across the boundary: a JavaScript
 //! exception unwinding into WebAssembly aborts the module, taking the database with it, so the
 //! glue catches everything and converts it to a code.
 

@@ -17,7 +17,7 @@ what justifies the "production-quality" claim — not the feature list.
 | Conformance | `vdb-testkit::suites` | Every `Storage`/`VectorIndex` impl obeys the contract | per impl |
 | Cross-platform | CI matrix | Same results on linux/mac/win/android/ios/wasm | every push |
 | Stress / soak | `benchmarks/` | Large datasets, long runs, memory stability | nightly |
-| Recall | `benchmarks/recall` | ANN quality vs exact ground truth | per index PR |
+| Recall | `crates/vdb-index-hnsw/tests/recall.rs`, and `hnsw_recall_at_10` in the benchmark suite | ANN quality vs exact ground truth | per index PR |
 | SDK e2e | `sdk/*/test` | Each binding round-trips real data | per SDK change |
 
 ## 8.2 Non-negotiable behavioural cases

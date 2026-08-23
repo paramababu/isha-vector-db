@@ -73,7 +73,7 @@ are validated earliest.
 20. Throwaway second index (LSH or IVF-flat) purely to prove the `VectorIndex` seam, then delete it.
 21. `vdb-ffi`: the C ABI, `cbindgen` header, `catch_unwind` wrappers, ABI conformance tests, ASAN.
     **Freeze `vdb.h`.**
-22. `vdb-node` + `sdk/typescript` + `sdk/node`. Node first: the fastest feedback loop of any
+22. `vdb-node` + `sdk/node` (a shared sdk/typescript package remains planned). Node first: the fastest feedback loop of any
     binding, and it shakes out ABI ergonomics before four harder platforms depend on them. **0.2.**
 
 **Phase 2 — SDKs, in this order and for these reasons**

@@ -16,5 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Every cited path and link resolves
+        run: ./scripts/check-references.sh
+
       - name: Core performs no I/O, forbids unsafe, has no dependencies
         run: ./scripts/check-core-purity.sh
