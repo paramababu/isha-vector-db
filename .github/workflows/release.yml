@@ -46,8 +46,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Intel Mac (x86_64-apple-darwin) is deliberately absent. GitHub's macos-13 runners
+          # never started across three consecutive runs, and the publish jobs wait on the whole
+          # matrix — so including it means never releasing at all. Apple Silicon is covered by
+          # macos-14. Intel Mac users build from source until a runner is reliably available;
+          # putting the line back is all that is needed then.
           - { os: macos-14,      target: aarch64-apple-darwin,      lib: libisha_vector_db_ffi.dylib }
-          - { os: macos-13,      target: x86_64-apple-darwin,       lib: libisha_vector_db_ffi.dylib }
           - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu,  lib: libisha_vector_db_ffi.so }
           - { os: windows-latest, target: x86_64-pc-windows-msvc,   lib: isha_vector_db_ffi.dll }
 
@@ -105,7 +109,6 @@ jobs:
       matrix:
         include:
           - { os: macos-14,       target: aarch64-apple-darwin,      npm: darwin-arm64 }
-          - { os: macos-13,       target: x86_64-apple-darwin,       npm: darwin-x64 }
           - { os: ubuntu-latest,  target: x86_64-unknown-linux-gnu,  npm: linux-x64 }
           - { os: windows-latest, target: x86_64-pc-windows-msvc,    npm: win32-x64 }
 

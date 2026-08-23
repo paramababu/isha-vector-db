@@ -47,7 +47,7 @@ function loadAddon() {
   } catch (cause) {
     throw new Error(
       `no isha-vector-db native addon for ${platform}. ` +
-        'Supported: darwin-arm64, darwin-x64, linux-x64, linux-arm64, win32-x64. ' +
+        'Supported: darwin-arm64, linux-x64, linux-arm64, win32-x64. ' +
         'From a checkout, run scripts/build-node.sh first.',
       { cause },
     );

@@ -96,6 +96,12 @@ publish is where it gets forgotten.
 after a delete. A failed release burns that number — go to the next patch rather than trying to
 reuse it. This is why the manual trigger defaults to a dry run.
 
+**A platform's runner never starts.** The publish jobs wait on the whole build matrix, so one
+unavailable runner blocks the entire release rather than just its own platform. `macos-13`
+behaved this way for 0.1.0 and Intel Mac was dropped rather than let it block everything. If it
+happens again, remove the matrix entry and its npm platform package, ship, and add it back — do
+not wait.
+
 **crates.io rate-limits new crates.** Publishing ten at once from a fresh account may hit a cap;
 the limit is lifted on request.
 
