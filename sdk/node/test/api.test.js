@@ -434,3 +434,37 @@ test('maintenance arguments are validated', () => {
     assert.throws(() => db.verify('nope'), /unknown verify level/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// error codes
+// ---------------------------------------------------------------------------
+
+test("a failure carries the engine's numeric code, not napi's status string", () => {
+  withDb((db) => {
+    const c = db.collection('docs', { dimension: 3 });
+    assert.throws(
+      () => c.upsert('bad', new Float32Array([1, 2])),
+      (e) => {
+        // Without the wrapper this is the string 'GenericFailure', and Node is then the only
+        // binding where a caller cannot branch on the code and has to match on English.
+        assert.equal(typeof e.code, 'number', `code was ${JSON.stringify(e.code)}`);
+        assert.equal(e.code, 4003);
+        assert.match(e.message, /3-dimensional/);
+        return true;
+      },
+    );
+  });
+});
+
+test('the code is attached to collection methods too, not only to open', () => {
+  withDb((db) => {
+    assert.throws(
+      () => db.collection('zero', { dimension: 0 }),
+      (e) => {
+        assert.equal(typeof e.code, 'number');
+        assert.ok(e.code > 0);
+        return true;
+      },
+    );
+  });
+});

@@ -39,6 +39,29 @@
 mod lock;
 mod sync;
 
+/// The wall clock, for platforms that have one.
+///
+/// This lives here rather than in `vdb-core` for the same reason `OsStorage` does: it is a
+/// platform capability, and the core is written to have none. It is not merely theoretical —
+/// `std::time::SystemTime::now()` **panics** on `wasm32-unknown-unknown`, where the standard
+/// library's implementation is a stub, so a clock in the core would make the core unusable on a
+/// target it otherwise supports.
+///
+/// Every application using a filesystem needs one of these, and before it existed each of them
+/// had to write the same six lines.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SystemClock;
+
+impl vdb_core::clock::Clock for SystemClock {
+    fn now_ms(&self) -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            // Before the epoch means a badly set clock, not something worth failing a write for.
+            // Timestamps here are metadata for a human reading `stats`, never used for ordering.
+            .map_or(0, |d| d.as_millis() as u64)
+    }
+}
+
 use std::fs::{self, File as StdFile, OpenOptions};
 use std::io;
 use std::path::{Component, Path, PathBuf};

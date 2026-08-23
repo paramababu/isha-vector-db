@@ -3,6 +3,22 @@
 An **embedded, offline-first vector database**. One Rust core with no I/O of its own, one frozen
 C ABI, and thin SDKs for React Native, Flutter, Android, iOS, Node.js and the web.
 
+## Install
+
+Pick your platform — each page is self-contained, with install steps, a first program, and the
+things that go wrong on that platform specifically.
+
+| | | | |
+|---|---|---|---|
+| [Python](docs/getting-started/python.md) | [Node.js](docs/getting-started/nodejs.md) | [React / web](docs/getting-started/web.md) | [React Native](docs/getting-started/react-native.md) |
+| [Android](docs/getting-started/android.md) | [iOS](docs/getting-started/ios.md) | [Rust](docs/getting-started/rust.md) | [C / C++](docs/getting-started/c.md) |
+
+```bash
+pip install vdb                 # Python
+npm install @vdb/node           # Node.js
+npm install @vdb/web            # browsers
+```
+
 Think SQLite, not Milvus: a library your application links against to keep vectors and metadata
 on local disk and search them. No server, no network, no daemon.
 
@@ -74,6 +90,7 @@ Nothing at or below the public API knows which platform it is on. That is enforc
 | Compaction, verification and stats in every SDK | Done |
 | HNSW graph index — 9-13x faster than the SIMD scan at 0.974 recall, graph persisted | Done |
 | Web / WASM — WebAssembly module, OPFS storage verified in a browser | Done |
+| Python — ctypes over the C ABI, 19 tests | Done |
 | React Native — JSI bridge, 56 C++ checks + 11 JS tests | Built (JSI glue and packaging unverified) |
 | Flutter | Next |
 | `vdb-index-flat`, search, filters | Not started |

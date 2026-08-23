@@ -9,6 +9,7 @@ use crate::error::{IdRejection, Result, ValidationError};
 use crate::metadata::Metadata;
 use crate::validation::limits;
 use crate::vector::VectorView;
+use core::fmt;
 
 pub use vdb_format::IdKind;
 
@@ -117,6 +118,21 @@ impl DocId {
 
 fn reject(reason: IdRejection, len: usize, max: usize) -> crate::DbError {
     ValidationError::InvalidDocumentId { reason, len, max }.into()
+}
+
+/// Printed as the id itself: `note-1`, or `42`.
+///
+/// Worth having because the first thing anyone does with a search result is print it, and
+/// without this they get `Str("note-1")` from the `Debug` formatter — the quotes and the variant
+/// name are noise in a log line, and working around it means a match on the enum in every
+/// caller.
+impl fmt::Display for DocId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Str(s) => f.write_str(s),
+            Self::U64(n) => write!(f, "{n}"),
+        }
+    }
 }
 
 impl From<&str> for DocId {

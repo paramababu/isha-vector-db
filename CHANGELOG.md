@@ -34,6 +34,34 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
 
 ### Added
 
+- **Getting-started documentation, one self-contained page per platform**
+  ([docs/getting-started](docs/getting-started/)): Python, Node.js, React/web, React Native,
+  Android, iOS, Rust, and C. Each has install steps, a first program, the operations you actually
+  use, and that platform's own pitfalls. Until now the project had twenty architecture documents
+  and not one page saying how to install it.
+
+  Verifying the examples rather than trusting them found four real defects, three of them in
+  shipped code rather than the prose. See *Fixed* below.
+
+- **A Python binding (`sdk/python`)**, `pip install vdb`, with 19 tests against the real engine.
+  ctypes over the C ABI rather than a compiled extension: nothing to build at install time, no
+  toolchain required, and no wheel matrix. NumPy arrays work through the buffer protocol without
+  the package importing NumPy.
+
+- `SystemClock` in `vdb-storage-os`. Every application using a filesystem needs one and each had
+  been writing the same six lines; the Rust getting-started example could not be written without
+  it. It lives in the platform crate rather than the core because `SystemTime::now()` **panics**
+  on `wasm32-unknown-unknown`.
+
+- `Display` for `DocId`, so printing a search result gives `note-1` rather than `Str("note-1")`.
+
+### Fixed
+
+- **Node error codes were unreachable.** napi-rs sets `error.code` to its own status string, so
+  `GenericFailure` was all a caller saw — Node was the only binding where you could not branch on
+  the engine's code and had to match on English instead. `e.code` is now the number.
+
+
 - **`docs/api/error-codes.md`, generated from the code.** Every one of the 48 codes, grouped by
   band, with its description taken from the constant's own doc comment. A test regenerates it
   (`VDB_BLESS=1`) and fails if the committed table disagrees with the source, so it cannot drift.
