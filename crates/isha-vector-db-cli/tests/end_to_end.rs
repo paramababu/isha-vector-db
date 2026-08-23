@@ -94,6 +94,7 @@ fn seed(dir: &TempDir) {
 /// It reproduced on Linux and not on macOS, which is what a race looks like rather than a
 /// platform bug. An application doing the same thing — closing and immediately reopening while
 /// spawning subprocesses — should retry the same way, and the Rust guide now says so.
+#[cfg(unix)]
 fn open_after_seed(dir: &TempDir) -> Database {
     let mut last = None;
     for attempt in 0..50 {
