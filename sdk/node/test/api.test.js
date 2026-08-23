@@ -143,12 +143,21 @@ test('close is idempotent, so a finally block cannot double-throw', () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('using disposes the database when scope exits', () => {
+// Calls the disposer rather than writing `using db = ...`.
+//
+// The `using` syntax needs Node 22, and this file has to parse on every version the package
+// supports — a syntax error is not a failing test, it is a file that never runs at all, which is
+// how Node 18 and 20 reported *zero* results here rather than one failure.
+//
+// `Symbol.dispose` is the whole mechanism `using` invokes, so calling it directly tests the same
+// contract on every supported version.
+test('the disposer releases the lock, which is what `using` calls', () => {
   const dir = scratch();
   {
-    // eslint-disable-next-line no-undef
-    using db = vdb.open(dir);
+    const db = vdb.open(dir);
     db.collection('docs', { dimension: 2 }).upsert('a', new Float32Array([1, 0]));
+    assert.equal(typeof db[Symbol.dispose], 'function', '`using` needs this to exist');
+    db[Symbol.dispose]();
   }
   // The lock was released, so a second open succeeds.
   const again = vdb.open(dir);

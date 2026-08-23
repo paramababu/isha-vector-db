@@ -26,7 +26,7 @@ let package = Package(
             linkerSettings: [
                 .unsafeFlags([
                     "-L\(repoRoot)/target/release",
-                    "-lvdb_ffi",
+                    "-lisha_vector_db_ffi",
                 ])
             ]
         ),

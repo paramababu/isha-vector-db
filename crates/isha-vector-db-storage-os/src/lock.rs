@@ -78,7 +78,7 @@ pub(crate) fn acquire(host: &Path, path: &DbPath) -> Result<Box<dyn FileLock>> {
         // *not* survive a crash gracefully. Declared honestly: `capabilities().file_locking` is
         // false off unix, and the conformance suite therefore requires this to say so rather
         // than pretend.
-        let _ = (host, OpenOptions::new());
+        let _ = (host, path, OpenOptions::new());
         Err(StorageError::Unsupported {
             operation: isha_vector_db_core::error::StorageOp::Lock,
             backend: "os",
