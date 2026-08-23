@@ -20,7 +20,6 @@
   },
   "optionalDependencies": {
     "@isais-logic/isha-vector-db-node-darwin-arm64": "0.1.0",
-    "@isais-logic/isha-vector-db-node-darwin-x64": "0.1.0",
     "@isais-logic/isha-vector-db-node-linux-x64": "0.1.0",
     "@isais-logic/isha-vector-db-node-linux-arm64": "0.1.0",
     "@isais-logic/isha-vector-db-node-win32-x64": "0.1.0"

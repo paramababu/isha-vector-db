@@ -12,6 +12,11 @@ npm install @isais-logic/isha-vector-db-node
 A native addon, so there is a prebuilt binary per platform. **Node 20 or newer** — the SDK uses
 `Symbol.dispose`, and `using` needs Node 22.
 
+Prebuilt for **macOS (Apple Silicon)**, **Linux (x64 and arm64)** and **Windows (x64)**.
+**Intel Mac is not in 0.1.0** — GitHub's `macos-13` runners never started across three release
+attempts, and one unavailable platform was blocking every other. Build from source on Intel Mac
+(`./scripts/build-node.sh`) until it is back.
+
 ### From a checkout
 
 ```bash
