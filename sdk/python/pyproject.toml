@@ -3,7 +3,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "vdb"
+name = "isha-vector-db"
 version = "0.0.1"
 description = "An embedded, offline-first vector database. No server, no dependencies."
 readme = "README.md"
@@ -18,8 +18,8 @@ dependencies = []
 Homepage = "https://github.com/paramababu/isha-vector-db"
 
 [tool.setuptools]
-packages = ["vdb"]
+packages = ["isha_vector_db"]
 
 [tool.setuptools.package-data]
 # The shared library is bundled into the wheel, one per platform.
-vdb = ["*.so", "*.dylib", "*.dll"]
+isha_vector_db = ["*.so", "*.dylib", "*.dll"]

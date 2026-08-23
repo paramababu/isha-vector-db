@@ -1,0 +1,24 @@
+[package]
+name = "isha-vector-db-cli"
+description = "Command-line tool for inspecting, verifying and compacting vdb databases."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "isha-vector-db"
+path = "src/main.rs"
+
+[dependencies]
+isha-vector-db-core.workspace = true
+isha-vector-db-format.workspace = true
+isha-vector-db-storage-os.workspace = true
+
+[dev-dependencies]
+isha-vector-db-storage-os.workspace = true
+
+[lints]
+workspace = true

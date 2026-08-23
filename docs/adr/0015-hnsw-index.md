@@ -17,8 +17,8 @@ something.
 
 ## Decision
 
-`vdb-index-hnsw` implements `VectorIndex` with a hierarchical navigable small world graph. It is
-supplied to `Database::open_with_index`, exactly as `vdb-index-flat` is, so `vdb-core` still knows
+`isha-vector-db-index-hnsw` implements `VectorIndex` with a hierarchical navigable small world graph. It is
+supplied to `Database::open_with_index`, exactly as `isha-vector-db-index-flat` is, so `isha-vector-db-core` still knows
 nothing about it.
 
 `VectorIndex` gained one defaulted method, `prepare(source, metric)`, called before each search.
@@ -69,8 +69,8 @@ on-disk form has changed.
 Two performance fixes were made only because the benchmark demanded them, and both are recorded
 because the numbers are the justification:
 
-- Scoring went through `vdb-core`'s scalar `Scorer`, while the flat scan it was being compared
-  against used NEON. Routing graph distances through `vdb-index-flat`'s kernels took the 5,000-
+- Scoring went through `isha-vector-db-core`'s scalar `Scorer`, while the flat scan it was being compared
+  against used NEON. Routing graph distances through `isha-vector-db-index-flat`'s kernels took the 5,000-
   vector build from 4.49s to 1.56s.
 - `search_layer` allocated and zeroed a `visited` array on every call — once per node per layer
   while building, once per query afterwards. Generation stamps took the 50,000-vector build from

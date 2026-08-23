@@ -7,7 +7,7 @@ Workflows are split by cost so the fast ones gate every PR and the slow ones run
 | Workflow | Trigger | Jobs |
 |---|---|---|
 | `ci-rust.yml` | every push/PR | `fmt --check`; `clippy -D warnings`; build+test on linux/macos/windows × stable+MSRV; `--no-default-features` and `--all-features` builds; doc build with `-D warnings`; `cargo-deny` (licenses, advisories, duplicate/banned deps) |
-| `ci-core-purity.yml` | every push/PR | asserts `vdb-core` and `vdb-format` link no I/O: no `std::fs`/`net`/`thread`/`time` imports, `forbid(unsafe_code)` present, dependency allow-list respected. **The mechanical guarantee behind rule 1.** |
+| `ci-core-purity.yml` | every push/PR | asserts `isha-vector-db-core` and `isha-vector-db-format` link no I/O: no `std::fs`/`net`/`thread`/`time` imports, `forbid(unsafe_code)` present, dependency allow-list respected. **The mechanical guarantee behind rule 1.** |
 | `ci-format.yml` | PR touching format/testdata | golden-file tests; a diff in `testdata/` fails unless the PR body contains `FORMAT-CHANGE:` with a rationale and a version bump |
 | `ci-crossbuild.yml` | every PR | `cargo build` for aarch64-android, armv7-android, aarch64-ios, ios-sim, wasm32; artifact size budgets enforced |
 | `ci-wasm.yml` | PR touching wasm/web | `wasm-pack test --headless` in Chrome + Firefox; bundle-size budget; OPFS integration tests |
@@ -68,7 +68,7 @@ handed to the app, and (c) another app or a person with the device reading data 
 | **Path traversal** | Collection names validated against a strict charset before becoming path components; the `Storage` impl additionally rejects any resolved path escaping the db root. Defence in depth, because one of these will be bypassed someday. |
 | **Partial writes / torn state** | WAL + dual-slot manifest + per-block CRC32C (§5). |
 | **Silent corruption (bit rot)** | CRC on every block, verified on read; `verify(Full)` for a deep scan. |
-| **Integer overflow in offset math** | `checked_*` arithmetic in all format code; overflow checks enabled in release for `vdb-format`. |
+| **Integer overflow in offset math** | `checked_*` arithmetic in all format code; overflow checks enabled in release for `isha-vector-db-format`. |
 | **Zip-bomb-style resource exhaustion** | Every allocation derived from file contents is capped by the actual file size and by the §7.5 limits. |
 | **Encryption at rest** | **Not implemented in v1, and the README says so in exactly those words.** Designed for: a `BlockCodec` trait (`encode`/`decode` per block, with room for an authentication tag) sits between persistence and storage; AES-256-GCM with a per-block nonce derived from `(file_id, block_no, generation)` is the intended v0.5 implementation. Keys never enter the core — the SDK obtains them from the platform keystore (Android Keystore, iOS Keychain/Secure Enclave, DPAPI, libsecret) and passes bytes, which are `Zeroize`d. |
 | **Secure deletion** | Genuinely not achievable on flash/COW filesystems: TRIM, wear levelling and APFS snapshots mean overwriting a file does not erase the data. Documented as a limitation. `compact()` removes deleted records from live files; real erasure requires full-disk encryption plus key destruction, which is the platform's job. Promising more than this would be dishonest. |

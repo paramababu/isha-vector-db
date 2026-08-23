@@ -1,10 +1,10 @@
-# @vdb/web
+# @isha-vector-db/web
 
 The same engine, compiled to WebAssembly, storing in the Origin Private File System.
 
 ```js
-import { load, Metric } from '@vdb/web';
-import { opfsAdapter } from '@vdb/web/adapters/opfs.js';
+import { load, Metric } from '@isha-vector-db/web';
+import { opfsAdapter } from '@isha-vector-db/web/adapters/opfs.js';
 
 const adapter = await opfsAdapter('my-app');
 const vdb = await load(fetch('/vdb.wasm'), adapter);
@@ -56,7 +56,7 @@ promise that resolves only once the queue has drained. The adapter also drains o
 when the page becomes hidden, which covers the ways a tab normally goes away, but not a crash.
 
 `adapters/node.js` is a third adapter over `node:fs`, used to test this stack without a browser.
-It is not a supported way to run vdb on a server — use the native addon in `sdk/node`, which has
+It is not a supported way to run isha-vector-db on a server — use the native addon in `sdk/node`, which has
 no WebAssembly boundary.
 
 ## Run it in a Worker

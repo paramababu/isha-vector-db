@@ -81,14 +81,14 @@ The requirement list forces this before we even compare languages:
 ## 2.4 Rust ground rules for this project
 
 - **MSRV** pinned (start at a release ~6 months old) and tested in CI; bumping MSRV is a minor-version event.
-- `#![forbid(unsafe_code)]` in `vdb-core` and `vdb-format`. `unsafe` is permitted only in
-  `vdb-index-flat` (SIMD), `vdb-storage-os` (mmap) and the binding crates, each block carrying a
+- `#![forbid(unsafe_code)]` in `isha-vector-db-core` and `isha-vector-db-format`. `unsafe` is permitted only in
+  `isha-vector-db-index-flat` (SIMD), `isha-vector-db-storage-os` (mmap) and the binding crates, each block carrying a
   `// SAFETY:` comment, and each of those crates runs under miri/ASAN in CI where applicable.
 - **No `panic!` reaches an FFI boundary.** Every exported function wraps its body in
   `catch_unwind` and converts a panic into `VDB_ERR_INTERNAL`. A panic crossing an FFI boundary is
   undefined behaviour and would take the host app down.
 - **No `unwrap()`/`expect()` outside tests** — enforced by clippy lint at deny level.
-- `vdb-core` compiles with `--no-default-features` and no `std::fs`, `std::net`, `std::time`, or
+- `isha-vector-db-core` compiles with `--no-default-features` and no `std::fs`, `std::net`, `std::time`, or
   `std::thread` usage. Enforced by a CI grep + a `cargo deny`-style import check. This is the
   mechanical guarantee behind "the core is platform-independent"; a rule that isn't checked by CI
   is a rule that will be broken by month three.

@@ -18,7 +18,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Golden fixtures still decode and re-encode identically
-        run: cargo test -p vdb-format --test golden
+        run: cargo test -p isha-vector-db-format --test golden
 
       - name: A changed fixture requires an explicit FORMAT-CHANGE declaration
         if: github.event_name == 'pull_request'
@@ -45,7 +45,7 @@ jobs:
         run: |
           base="origin/${{ github.base_ref }}"
           if git diff --quiet "$base"...HEAD -- testdata/; then exit 0; fi
-          if git diff "$base"...HEAD -- crates/vdb-format/src/lib.rs | grep -q 'FORMAT_VERSION'; then
+          if git diff "$base"...HEAD -- crates/isha-vector-db-format/src/lib.rs | grep -q 'FORMAT_VERSION'; then
             echo "FORMAT_VERSION touched."
           else
             echo "FAIL: testdata/ changed but FORMAT_VERSION did not."
@@ -62,4 +62,4 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo install cargo-fuzz --locked
       - run: cargo +nightly fuzz build
-        working-directory: crates/vdb-format
+        working-directory: crates/isha-vector-db-format

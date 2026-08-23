@@ -28,10 +28,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       # The engine crates must build for every target. Backends that are inherently
       # platform-specific are excluded per target as they are added.
-      - run: cargo build -p vdb-core -p vdb-format -p vdb-index-flat -p vdb-storage-memory --target ${{ matrix.target }}
+      - run: cargo build -p isha-vector-db-core -p isha-vector-db-format -p isha-vector-db-index-flat -p isha-vector-db-storage-memory --target ${{ matrix.target }}
       # The OS backend is for real filesystems, so it is built everywhere except wasm.
       - if: matrix.target != 'wasm32-unknown-unknown'
-        run: cargo build -p vdb-storage-os --target ${{ matrix.target }}
+        run: cargo build -p isha-vector-db-storage-os --target ${{ matrix.target }}
 
   apple:
     runs-on: macos-latest

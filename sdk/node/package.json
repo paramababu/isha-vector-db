@@ -1,5 +1,5 @@
 {
-  "name": "@vdb/node",
+  "name": "@isha-vector-db/node",
   "version": "0.0.1",
   "description": "An embedded, offline-first vector database for Node.js.",
   "license": "Apache-2.0",

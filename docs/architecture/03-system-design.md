@@ -42,20 +42,20 @@ constructing a `Storage` implementation and handing it to `Database::open`.
 ```mermaid
 graph TD
   subgraph engine
-    FMT[vdb-format<br/>on-disk encoding + versions]
-    CORE[vdb-core<br/>engine, traits, API]
-    FLAT[vdb-index-flat]
-    HNSW[vdb-index-hnsw<br/>phase 3]
-    MEM[vdb-storage-memory]
-    OS[vdb-storage-os]
+    FMT[isha-vector-db-format<br/>on-disk encoding + versions]
+    CORE[isha-vector-db-core<br/>engine, traits, API]
+    FLAT[isha-vector-db-index-flat]
+    HNSW[isha-vector-db-index-hnsw<br/>phase 3]
+    MEM[isha-vector-db-storage-memory]
+    OS[isha-vector-db-storage-os]
     OPFS[vdb-storage-opfs]
-    TK[vdb-testkit<br/>fault injection, generators]
+    TK[isha-vector-db-testkit<br/>fault injection, generators]
   end
   subgraph surface
-    FFI[vdb-ffi → vdb.h + cdylib/staticlib]
-    NODE[vdb-node → napi addon]
+    FFI[isha-vector-db-ffi → vdb.h + cdylib/staticlib]
+    NODE[isha-vector-db-node → napi addon]
     WASM[vdb-wasm → wasm-bindgen]
-    CLI[vdb-cli]
+    CLI[isha-vector-db-cli]
   end
   subgraph sdks
     TS["sdk/typescript (planned)"]
@@ -89,8 +89,8 @@ graph TD
   NPKG --> TS
 ```
 
-Note what is **absent**: `vdb-core` depends on nothing but `vdb-format`. Index and storage crates
-depend on `vdb-core` (for its traits), not the other way round — the engine receives them as
+Note what is **absent**: `isha-vector-db-core` depends on nothing but `isha-vector-db-format`. Index and storage crates
+depend on `isha-vector-db-core` (for its traits), not the other way round — the engine receives them as
 `Box<dyn Storage>` / `Box<dyn VectorIndex>` from the caller or from a registry. This inversion is
 what makes it possible to build a mobile binary that contains only flat+os and a web binary that
 contains only flat+opfs.
@@ -103,7 +103,7 @@ vdb/
 ├── rust-toolchain.toml            # pinned toolchain; MSRV enforced in CI
 ├── deny.toml                      # cargo-deny: licenses, advisories, bans
 ├── crates/
-│   ├── vdb-core/
+│   ├── isha-vector-db-core/
 │   │   ├── src/
 │   │   │   ├── lib.rs
 │   │   │   ├── api/               # Database, Collection, Snapshot — the public surface
@@ -125,26 +125,26 @@ vdb/
 │   │   │   ├── error/             # DbError tree, ErrorCode, context
 │   │   │   └── util/              # crc32c, varint, bitmap, small-vec, ordered-float
 │   │   └── tests/                 # integration tests against the public API only
-│   ├── vdb-format/                # byte layouts, headers, encoders/decoders, versions
+│   ├── isha-vector-db-format/                # byte layouts, headers, encoders/decoders, versions
 │   │   ├── src/
 │   │   ├── fuzz/                  # cargo-fuzz targets, one per decoder
 │   │   └── tests/golden/          # committed v1 fixture files (never regenerate blindly)
-│   ├── vdb-index-flat/
+│   ├── isha-vector-db-index-flat/
 │   │   └── src/{lib.rs, scalar.rs, simd_x86.rs, simd_neon.rs, simd_wasm.rs}
-│   ├── vdb-index-hnsw/            # phase 3
-│   ├── vdb-storage-memory/
-│   ├── vdb-storage-os/            # std::fs, file locks, optional memmap2
+│   ├── isha-vector-db-index-hnsw/            # phase 3
+│   ├── isha-vector-db-storage-memory/
+│   ├── isha-vector-db-storage-os/            # std::fs, file locks, optional memmap2
 │   ├── vdb-storage-opfs/          # wasm32 only
-│   ├── vdb-testkit/               # FaultyStorage, dataset generators, recall harness
-│   ├── vdb-ffi/                   # C ABI; cbindgen config; include/vdb.h checked in
-│   ├── vdb-node/                  # napi-rs
+│   ├── isha-vector-db-testkit/               # FaultyStorage, dataset generators, recall harness
+│   ├── isha-vector-db-ffi/                   # C ABI; cbindgen config; include/vdb.h checked in
+│   ├── isha-vector-db-node/                  # napi-rs
 │   ├── vdb-wasm/                  # wasm-bindgen
-│   └── vdb-cli/                   # inspect | verify | compact | migrate | bench | dump
+│   └── isha-vector-db-cli/                   # inspect | verify | compact | migrate | bench | dump
 ├── sdk/
 │   ├── typescript/                # shared types + high-level API, zero native deps
-│   ├── node/                      # npm: @vdb/node  (+ optional platform packages)
-│   ├── web/                       # npm: @vdb/web   (wasm + dedicated worker + OPFS)
-│   ├── react-native/              # npm: @vdb/react-native (JSI/TurboModule)
+│   ├── node/                      # npm: @isha-vector-db/node  (+ optional platform packages)
+│   ├── web/                       # npm: @isha-vector-db/web   (wasm + dedicated worker + OPFS)
+│   ├── react-native/              # npm: @isha-vector-db/react-native (JSI/TurboModule)
 │   ├── flutter/                   # pub: vdb  (ffigen bindings + Dart API)
 │   ├── android/                   # AAR: Kotlin API + JNI shim + prefab
 │   └── ios/                       # SwiftPM + Podspec, XCFramework, Swift API
@@ -161,13 +161,13 @@ vdb/
 
 | Change | Why |
 |---|---|
-| `crates/` workspace instead of a single `core/src/...` tree | Cargo needs crate roots. More importantly, making storage and index implementations *separate crates* means the compiler enforces the layering: `vdb-index-flat` physically cannot reach into persistence internals. Directories inside one crate enforce nothing. |
+| `crates/` workspace instead of a single `core/src/...` tree | Cargo needs crate roots. More importantly, making storage and index implementations *separate crates* means the compiler enforces the layering: `isha-vector-db-index-flat` physically cannot reach into persistence internals. Directories inside one crate enforce nothing. |
 | Top-level `storage/` and `indexes/` folded into `crates/` | They are Rust crates like any other. Keeping them top-level suggests they are a different kind of thing; they are not, and the split would just add path noise. |
-| `bindings/` folded into `crates/` (`vdb-ffi`, `vdb-wasm`, `vdb-node`) and `sdk/` (JNI/ObjC shims) | `ffi`/`wasm`/`node` *are* Rust crates. The JNI and Objective-C shims are packaging artifacts of the Android/iOS SDKs and belong next to the Gradle/Xcode projects that build them, not in a separate tree that no build system owns. |
-| New crate: `vdb-format` | The on-disk format deserves its own crate, its own fuzz corpus, its own golden fixtures, and its own semver. The `migrate` tool must be able to read *old* formats without linking the current engine. Splitting it now is cheap; splitting it after v1 is not. |
-| New crate: `vdb-testkit` | Fault-injection storage and dataset generators are needed by core tests, the CLI, and the benchmarks. Without a shared crate they get copy-pasted three times. |
+| `bindings/` folded into `crates/` (`isha-vector-db-ffi`, `vdb-wasm`, `isha-vector-db-node`) and `sdk/` (JNI/ObjC shims) | `ffi`/`wasm`/`node` *are* Rust crates. The JNI and Objective-C shims are packaging artifacts of the Android/iOS SDKs and belong next to the Gradle/Xcode projects that build them, not in a separate tree that no build system owns. |
+| New crate: `isha-vector-db-format` | The on-disk format deserves its own crate, its own fuzz corpus, its own golden fixtures, and its own semver. The `migrate` tool must be able to read *old* formats without linking the current engine. Splitting it now is cheap; splitting it after v1 is not. |
+| New crate: `isha-vector-db-testkit` | Fault-injection storage and dataset generators are needed by core tests, the CLI, and the benchmarks. Without a shared crate they get copy-pasted three times. |
 | New package: sdk/typescript (**planned, not built**) | Node, Web and React Native share one API surface and one set of docs. Only the transport differs. Three hand-written TS APIs would drift within two releases. Each SDK currently carries its own hand-written surface, which is exactly the drift this was meant to prevent. |
-| `testdata/` at repo root | Golden files are consumed by `vdb-format`, `vdb-cli` and the migration tests. Root-level makes the shared ownership obvious. |
+| `testdata/` at repo root | Golden files are consumed by `isha-vector-db-format`, `isha-vector-db-cli` and the migration tests. Root-level makes the shared ownership obvious. |
 
 ## 3.4 Module responsibilities
 
@@ -179,7 +179,7 @@ Each module owns exactly one concern, and the "must not" column is the load-bear
 | `catalog` | Collection registry, per-collection schema (dimension, metric, index kind), open/close state machine | Know the byte layout of anything |
 | `document` | `DocId` (external, string/u64), `RowId` (internal, dense u64), `Document` assembly | Perform I/O |
 | `vector` | `VectorView<'a>` borrowed slices, dimension checks, dtype tag, norm cache | Own memory for stored vectors (segments do) |
-| `metadata` | `Value` enum + typed accessors + size limits | Define the wire encoding (that's `vdb-format`) |
+| `metadata` | `Value` enum + typed accessors + size limits | Define the wire encoding (that's `isha-vector-db-format`) |
 | `filter` | Filter AST, type-coercion rules, evaluator, planner (bitmap prefilter vs streaming) | Read files |
 | `search` | Metric kernels dispatch, scoring contract, `TopK` heap, tie-breaking | Know about indexes or storage |
 | `index` | `VectorIndex` trait, `IndexRegistry`, index lifecycle (build/save/load/rebuild) | Implement any specific algorithm |

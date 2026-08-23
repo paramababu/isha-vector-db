@@ -8,16 +8,16 @@ what justifies the "production-quality" claim — not the feature list.
 | Layer | Where | What it proves | Runs |
 |---|---|---|---|
 | Unit | `crates/*/src/**/#[cfg(test)]` | Module-local logic, boundaries, error paths | every push, seconds |
-| Integration | `crates/vdb-core/tests/` | Public API behaviour only (no internals) | every push |
+| Integration | `crates/isha-vector-db-core/tests/` | Public API behaviour only (no internals) | every push |
 | Property | `proptest` in core + format | Invariants over generated inputs | every push |
-| Fuzz | `crates/vdb-format/fuzz/` | Decoders never panic/OOM/hang on any bytes | nightly + on format PRs |
-| Fault injection | `vdb-testkit::FaultyStorage` | Crash at any I/O point → recoverable | every push |
+| Fuzz | `crates/isha-vector-db-format/fuzz/` | Decoders never panic/OOM/hang on any bytes | nightly + on format PRs |
+| Fault injection | `isha-vector-db-testkit::FaultyStorage` | Crash at any I/O point → recoverable | every push |
 | Golden format | `testdata/` | Byte-level format stability across versions | every push |
 | Concurrency | stress + `loom` | Snapshot isolation, no data races | every push (loom: nightly) |
-| Conformance | `vdb-testkit::suites` | Every `Storage`/`VectorIndex` impl obeys the contract | per impl |
+| Conformance | `isha-vector-db-testkit::suites` | Every `Storage`/`VectorIndex` impl obeys the contract | per impl |
 | Cross-platform | CI matrix | Same results on linux/mac/win/android/ios/wasm | every push |
 | Stress / soak | `benchmarks/` | Large datasets, long runs, memory stability | nightly |
-| Recall | `crates/vdb-index-hnsw/tests/recall.rs`, and `hnsw_recall_at_10` in the benchmark suite | ANN quality vs exact ground truth | per index PR |
+| Recall | `crates/isha-vector-db-index-hnsw/tests/recall.rs`, and `hnsw_recall_at_10` in the benchmark suite | ANN quality vs exact ground truth | per index PR |
 | SDK e2e | `sdk/*/test` | Each binding round-trips real data | per SDK change |
 
 ## 8.2 Non-negotiable behavioural cases
@@ -61,7 +61,7 @@ one document with 64 KiB of metadata; 100k documents where 99% are deleted.
 
 ## 8.3 Fault injection: the centrepiece
 
-`vdb-testkit::FaultyStorage` wraps any `Storage` and can, at a chosen operation index, inject:
+`isha-vector-db-testkit::FaultyStorage` wraps any `Storage` and can, at a chosen operation index, inject:
 a torn write (first N bytes only), `ENOSPC`, `EIO`, a silently dropped `sync_data`, a process
 "crash" (all subsequent ops fail and the handle is poisoned), a truncated file, or bit rot.
 
@@ -77,14 +77,14 @@ for op_index in 0..total_ops_of_the_workload:
     assert: verify(Full) passes
 ```
 
-Because `vdb-storage-memory` makes this run without touching a disk, the whole sweep executes in
+Because `isha-vector-db-storage-memory` makes this run without touching a disk, the whole sweep executes in
 seconds and runs on every push. This single test class is worth more than any amount of hand-written
 "does it save?" testing, and it is the thing that catches the bugs that would otherwise be found by
 a user losing their data on a subway platform.
 
 ## 8.4 Conformance suites
 
-`vdb-testkit` exports `storage_conformance(impl)` and `index_conformance(impl)` — generic suites
+`isha-vector-db-testkit` exports `storage_conformance(impl)` and `index_conformance(impl)` — generic suites
 every implementation must pass, including ones written by third parties. The storage suite verifies
 positional I/O semantics, append offsets, truncation, sync, locking, and that each declared
 capability actually behaves as declared (e.g. if you claim `atomic_rename`, a rename is observed as
@@ -104,8 +104,8 @@ This is how "the abstraction is real" gets enforced mechanically rather than by 
 
 ## 8.6 Coverage policy
 
-`cargo-llvm-cov` in CI, published to the PR. Targets: **≥ 90% lines in `vdb-core` and
-`vdb-format`**, ≥ 80% elsewhere. Explicitly **not** a merge gate on the number, because coverage
+`cargo-llvm-cov` in CI, published to the PR. Targets: **≥ 90% lines in `isha-vector-db-core` and
+`isha-vector-db-format`**, ≥ 80% elsewhere. Explicitly **not** a merge gate on the number, because coverage
 gates reward tests that execute code without asserting anything. The merge gate is the review
 checklist in §8.2. Coverage is used to *find* untested error paths — an uncovered `Err` branch is
 the signal worth acting on.

@@ -11,6 +11,34 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
 
 ### Changed
 
+- **Renamed from `vdb` to `isha-vector-db`**, matching the repository. Everything user-facing
+  moves; the C ABI does not.
+
+  | | was | now |
+  |---|---|---|
+  | Rust crates | `vdb-core`, `vdb-ffi`, … | `isha-vector-db-core`, `isha-vector-db-ffi`, … |
+  | Python | `pip install vdb`, `import vdb` | `pip install isha-vector-db`, `import isha_vector_db` |
+  | npm | `@vdb/node`, `@vdb/web` | `@isha-vector-db/node`, `@isha-vector-db/web` |
+  | Java | `dev.vdb` | `dev.isha.vectordb` |
+  | Swift | `import Vdb` | `import IshaVectorDB` |
+  | CLI | `vdb stats` | `isha-vector-db stats` |
+  | Library file | `libvdb_ffi.a` | `libisha_vector_db_ffi.a` |
+
+  **The C ABI keeps its `vdb_` prefix and `vdb_abi_version()` stays 1.** A long product name with
+  a short symbol prefix is what SQLite (`sqlite3_`) and LevelDB (`leveldb_`) do, and renaming the
+  symbols would have broken every compiled caller for nothing. `vdb.h` and the header guards are
+  unchanged, so C callers need do nothing.
+
+  The JNI symbols *did* have to move, because their names are derived from the Java package.
+
+  Found while renaming: `check-core-purity.sh` decided whether a dependency was first-party by
+  matching a `vdb-` prefix, and silently began reporting the core's own dependencies as
+  third-party. The reference checker caught nothing because no path was broken — it was the
+  guard's own logic that had rotted.
+
+
+### Changed
+
 - **Storage format: version 2.** Metadata maps of eight fields or more now carry a table of
   `u16` offsets that field lookup binary-searches instead of walking
   ([ADR-0014](docs/adr/0014-metadata-offset-table.md)). Records below eight fields are
@@ -48,7 +76,7 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
   toolchain required, and no wheel matrix. NumPy arrays work through the buffer protocol without
   the package importing NumPy.
 
-- `SystemClock` in `vdb-storage-os`. Every application using a filesystem needs one and each had
+- `SystemClock` in `isha-vector-db-storage-os`. Every application using a filesystem needs one and each had
   been writing the same six lines; the Rust getting-started example could not be written without
   it. It lives in the platform crate rather than the core because `SystemTime::now()` **panics**
   on `wasm32-unknown-unknown`.
@@ -98,9 +126,9 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
   Calls are synchronous and run on the caller's thread, which the README says plainly.
 
 
-- **A graph index (`vdb-index-hnsw`), Phase 3.** Approximate nearest neighbours over a
+- **A graph index (`isha-vector-db-index-hnsw`), Phase 3.** Approximate nearest neighbours over a
   hierarchical navigable small world graph, supplied to `Database::open_with_index` exactly as
-  the flat index is, so `vdb-core` still knows nothing about it
+  the flat index is, so `isha-vector-db-core` still knows nothing about it
   ([ADR-0015](docs/adr/0015-hnsw-index.md)).
 
   Measured against the NEON flat scan on the same corpus, `ef_search` 64: **3.5× faster at
@@ -143,10 +171,10 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
 
 - **The web SDK (`sdk/web`), running the engine in WebAssembly on OPFS.** Phase 4.
 
-  `vdb-storage-web` is a new storage backend that calls a hand-written table of host imports, so
-  `vdb-core` still knows nothing about any platform. There is no `wasm-bindgen` and no bundler:
+  `isha-vector-db-storage-web` is a new storage backend that calls a hand-written table of host imports, so
+  `isha-vector-db-core` still knows nothing about any platform. There is no `wasm-bindgen` and no bundler:
   the SDK drives the same `include/vdb.h` every other binding uses, and the toolchain is
-  `cargo build --target wasm32-unknown-unknown`. The module is 362 KB.
+  `cargo build --target wasm32-unknown-unknown`. The module is 366 KB.
 
   The engine calls storage synchronously, but OPFS sync access handles are *obtained*
   asynchronously, so a file cannot be opened when the engine asks. The OPFS adapter opens a pool
@@ -184,34 +212,34 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
 
 - Architecture documentation: eleven design documents plus decision records
   (`docs/architecture/`, `docs/adr/`).
-- `vdb-core`: structured error model with stable numeric codes and recoverability
+- `isha-vector-db-core`: structured error model with stable numeric codes and recoverability
   classification; `DbPath` with construction-time traversal prevention; CRC-32C, canonical
   LEB128 varints, and a population-counted bitmap; the `Storage`/`File`/`FileLock` traits and
   the capability model.
-- `vdb-storage-memory`: the reference storage backend, with power-loss simulation so durability
+- `isha-vector-db-storage-memory`: the reference storage backend, with power-loss simulation so durability
   can be tested without a filesystem.
-- `vdb-testkit`: the 25-check storage conformance suite and a seeded deterministic RNG.
+- `isha-vector-db-testkit`: the 25-check storage conformance suite and a seeded deterministic RNG.
 - CI: formatting, clippy at deny-warnings, a stable and MSRV test matrix across three operating
   systems, cross-compilation to Android, iOS, macOS and wasm32, and the core-purity guard.
 
-- `vdb-format`: on-disk format **version 1**. A 32-byte self-checksumming header on every file;
+- `isha-vector-db-format`: on-disk format **version 1**. A 32-byte self-checksumming header on every file;
   a canonical metadata value codec that rejects unsorted keys, non-minimal varints and hostile
   nesting; the dual-slot manifest with its crash-safe slot-selection rule; the write-ahead log,
   which distinguishes a torn tail from real corruption and makes batches all-or-nothing; and the
   four segment blocks. Golden fixtures in `testdata/v1/` and six `cargo-fuzz` targets.
-- `vdb-core` data model: `VectorView` (borrowed until the write-ahead log, with both a native
+- `isha-vector-db-core` data model: `VectorView` (borrowed until the write-ahead log, with both a native
   `&[f32]` and a raw-bytes variant so bindings copy nothing), `Metadata` with dotted-path lookup
   and total resolution semantics, `DocId`/`RowId`, `DocumentInput`/`Document`, and the single
   limits table with validation for collection names, ids, dimensions, `top_k` and batch size.
-- `vdb-core` write path: an arena-backed `Memtable` with deterministic flush ordering; a
+- `isha-vector-db-core` write path: an arena-backed `Memtable` with deterministic flush ordering; a
   `WalWriter` that writes each transaction group in a single append so a commit record can never
   become durable separately from what it commits; replay that distinguishes a torn tail from
   damage; and `Durability` (`Full`/`Batch`/`Relaxed`, defaulting to `Batch`).
-- `vdb-testkit`: `FaultyStorage`, injecting crashes, torn writes, `ENOSPC`, transient errors and
+- `isha-vector-db-testkit`: `FaultyStorage`, injecting crashes, torn writes, `ENOSPC`, transient errors and
   dropped syncs at a chosen I/O operation.
 - The crash sweep: five fault classes swept across every mutating I/O operation in a workload,
   asserting after each that recovery yields one of the legal committed prefixes.
-- `vdb-core` persistence: `layout` (every path in the database built in one place, validated
+- `isha-vector-db-core` persistence: `layout` (every path in the database built in one place, validated
   once), `ManifestStore` (dual-slot commit that never overwrites the slot it would fall back
   to), and segment flush/read-back including tombstone rewriting, orphan detection and
   cross-file row-count consistency checks.
@@ -227,16 +255,16 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
   one, ties broken by ascending id); per-query metric override, score thresholds and
   `Include` control; and a cooperative `Budget` for cancellation and scan ceilings. Unflushed
   writes are searchable, and a buffered overwrite shadows its flushed copy.
-- `vdb_core::index`: the `VectorIndex` trait, `VectorSource`, `LiveSet`, `RowPredicate`,
+- `isha_vector_db_core::index`: the `VectorIndex` trait, `VectorSource`, `LiveSet`, `RowPredicate`,
   `Budget`, and `ExactScan` — the always-available reference implementation.
-- `vdb-index-flat`: the home of the future SIMD kernels, delegating to the reference today, with
+- `isha-vector-db-index-flat`: the home of the future SIMD kernels, delegating to the reference today, with
   the differential and exactness suite that will validate them.
 - **Metadata filters**: a typed expression tree (`Eq`/`Ne`/`Gt`/`Gte`/`Lt`/`Lte`/`In`/`Nin`/
   `Exists`/`IsNull`/`StartsWith`/`Contains`/`And`/`Or`/`Not`) over dotted field paths, wired
   into `SearchRequest`. Evaluation is total — a type mismatch is `false`, never an error — and
   the rules are documented in `docs/api/filters.md`. `top_k` counts matches rather than
   candidates, and `SearchStats` reports selectivity.
-- **`vdb-storage-os`**: the filesystem backend. Positional I/O with short-read/short-write
+- **`isha-vector-db-storage-os`**: the filesystem backend. Positional I/O with short-read/short-write
   loops, `F_FULLFSYNC` on Darwin (where plain `fsync` does not flush the device cache),
   directory syncing so a rename is durable, and `flock`-based advisory locking that the kernel
   releases when a process dies. Passes the same conformance suite as the in-memory backend,
@@ -252,27 +280,27 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
   so it works on a database an application has open; distinct exit codes for damage versus
   failure to run.
 - `Storage::describe` so errors name the actual location rather than the backend's type name.
-- **Benchmark harness** (`vdb-bench`) with a committed baseline in `benchmarks/results/`.
+- **Benchmark harness** (`isha-vector-db-bench`) with a committed baseline in `benchmarks/results/`.
   Clustered rather than uniform data, queries drawn from the corpus, documented percentile
   convention, and a refusal to write JSON from a debug build. Measures insert, search, filtered
   search, id lookup, cold open, recovery, compaction, storage amplification and peak memory.
-- **SIMD kernels** in `vdb-index-flat`: NEON, AVX2+FMA with runtime detection, and `simd128`,
+- **SIMD kernels** in `isha-vector-db-index-flat`: NEON, AVX2+FMA with runtime detection, and `simd128`,
   each differential-tested against the portable reference at every vector length. 4.9× faster
-  search on the benchmark machine. Reached via `Database::open_with_index`, so `vdb-core` keeps
+  search on the benchmark machine. Reached via `Database::open_with_index`, so `isha-vector-db-core` keeps
   `forbid(unsafe_code)` and the layering that lets a build ship only the indexes it needs.
-- `vdb-format` now fails to compile on a big-endian target, with a message explaining what a port
+- `isha-vector-db-format` now fails to compile on a big-endian target, with a message explaining what a port
   would involve — the invariant is enforced rather than documented.
-- **Lazy filter field lookup**: `vdb_format::find_path` walks an encoded metadata map and decodes
+- **Lazy filter field lookup**: `isha_vector_db_format::find_path` walks an encoded metadata map and decodes
   only the named field, skipping the rest without allocating. Filtered search went from 1.5×
   slower than an unfiltered scan to break-even. No format change — the existing sorted-key
   encoding already supports an early stop.
-- **The C ABI** (`vdb-ffi`, `include/vdb.h`): 25 functions covering lifecycle, collections,
+- **The C ABI** (`isha-vector-db-ffi`, `include/vdb.h`): 25 functions covering lifecycle, collections,
   documents, search and metadata. Opaque handles, pointer-plus-length strings, zero-copy
   vectors, out-parameter errors with stable codes, `catch_unwind` at every entry point, and a
   null check on every pointer. Guarded by a bidirectional header/implementation drift test, an
   ABI behaviour suite, a real C program compiled and run in CI on Linux and macOS, a
   version-bump gate, and a 1.5 MB size budget.
-- **Node SDK** (`@vdb/node`): an N-API addon plus a thin JavaScript layer, with TypeScript
+- **Node SDK** (`@isha-vector-db/node`): an N-API addon plus a thin JavaScript layer, with TypeScript
   declarations that are the canonical shape every other JavaScript SDK will mirror. Supports
   `using` for scope-based closing. Tested on Node 18 through 22 from one binary, which is the
   claim N-API exists to make.

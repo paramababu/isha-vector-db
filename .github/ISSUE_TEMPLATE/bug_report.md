@@ -26,4 +26,4 @@ labels: bug
 **Is data at risk?**
 
 <!-- If this involves a database that will not open, please do not delete it — a copy, or the
-     output of `vdb verify --full`, is enormously helpful. -->
+     output of `isha-vector-db verify --full`, is enormously helpful. -->

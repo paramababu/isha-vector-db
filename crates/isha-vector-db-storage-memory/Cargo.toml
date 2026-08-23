@@ -1,0 +1,18 @@
+[package]
+name = "isha-vector-db-storage-memory"
+description = "In-memory Storage backend for vdb: the reference implementation and the substrate for fault-injection testing."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+isha-vector-db-core.workspace = true
+
+[dev-dependencies]
+isha-vector-db-testkit.workspace = true
+
+[lints]
+workspace = true

@@ -1,4 +1,4 @@
-# vdb on iOS
+# isha-vector-db on iOS
 
 Swift, through a C interop layer. There is no Objective-C in the middle.
 
@@ -17,7 +17,7 @@ dependencies: [
     .package(url: "https://github.com/paramababu/isha-vector-db", from: "0.0.1"),
 ],
 targets: [
-    .target(name: "MyApp", dependencies: [.product(name: "Vdb", package: "isha-vector-db")]),
+    .target(name: "MyApp", dependencies: [.product(name: "IshaVectorDB", package: "isha-vector-db")]),
 ]
 ```
 
@@ -56,7 +56,7 @@ try url.setResourceValues(&values)
 ## Your first database
 
 ```swift
-import Vdb
+import IshaVectorDB
 
 let db = try Database.open(at: path)
 defer { db.close() }

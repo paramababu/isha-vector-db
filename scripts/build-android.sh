@@ -42,9 +42,9 @@ for pair in $ABIS; do
   abi="${pair##*:}"
   echo "--- $abi ($target)"
   rustup target add "$target" >/dev/null 2>&1 || true
-  cargo build --release -p vdb-jni --target "$target"
+  cargo build --release -p isha-vector-db-jni --target "$target"
   mkdir -p "$OUT/$abi"
-  cp "target/$target/release/libvdb_jni.so" "$OUT/$abi/"
-  printf '    %s: %s bytes\n' "$abi" "$(wc -c < "$OUT/$abi/libvdb_jni.so" | tr -d ' ')"
+  cp "target/$target/release/libisha_vector_db_jni.so" "$OUT/$abi/"
+  printf '    %s: %s bytes\n' "$abi" "$(wc -c < "$OUT/$abi/libisha_vector_db_jni.so" | tr -d ' ')"
 done
 echo "wrote $OUT"

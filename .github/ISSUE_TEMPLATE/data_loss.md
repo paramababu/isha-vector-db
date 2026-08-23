@@ -24,4 +24,4 @@ is usually what makes the difference between a fix and a guess.
 
 **Diagnostics**
 
-<!-- If you can run it: `vdb verify --full <path>` and `vdb inspect <path>`. -->
+<!-- If you can run it: `isha-vector-db verify --full <path>` and `isha-vector-db inspect <path>`. -->

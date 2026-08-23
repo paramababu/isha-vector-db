@@ -18,7 +18,7 @@ const vdb = require('..');
 
 let counter = 0;
 function scratch() {
-  const dir = path.join(os.tmpdir(), `vdb-node-test-${process.pid}-${counter++}`);
+  const dir = path.join(os.tmpdir(), `isha-vector-db-node-test-${process.pid}-${counter++}`);
   fs.rmSync(dir, { recursive: true, force: true });
   return dir;
 }

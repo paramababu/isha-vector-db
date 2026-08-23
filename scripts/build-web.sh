@@ -13,10 +13,10 @@ if ! rustup target list --installed | grep -q "$TARGET"; then
   rustup target add "$TARGET"
 fi
 
-echo "building vdb-ffi for $TARGET"
-cargo build -p vdb-ffi --target "$TARGET" --release
+echo "building isha-vector-db-ffi for $TARGET"
+cargo build -p isha-vector-db-ffi --target "$TARGET" --release
 
-cp "target/$TARGET/release/vdb_ffi.wasm" sdk/web/vdb.wasm
+cp "target/$TARGET/release/isha_vector_db_ffi.wasm" sdk/web/vdb.wasm
 SIZE=$(wc -c < sdk/web/vdb.wasm | tr -d ' ')
 echo "sdk/web/vdb.wasm: $SIZE bytes"
 

@@ -174,11 +174,11 @@ into a reusable buffer, so the working set is not required to fit in RAM.
 
 ## 5.9 Storage implementations
 
-- **`vdb-storage-memory`** — `BTreeMap<DbPath, Vec<u8>>`. The reference implementation and the
+- **`isha-vector-db-storage-memory`** — `BTreeMap<DbPath, Vec<u8>>`. The reference implementation and the
   substrate for fault injection. `capabilities`: everything true except `mmap`. Its most important
   job is making the entire persistence test suite runnable with no filesystem, so it runs in
   milliseconds and identically on every CI runner.
-- **`vdb-storage-os`** — `std::fs` with positional I/O (`pread`/`pwrite`), `memmap2` behind a
+- **`isha-vector-db-storage-os`** — `std::fs` with positional I/O (`pread`/`pwrite`), `memmap2` behind a
   feature flag, `fs2`-style advisory locks. Handles the platform quirks: `fsync` on the *directory*
   after rename on POSIX; `FlushFileBuffers` and rename-replace semantics on Windows; `F_FULLFSYNC`
   on macOS/iOS (plain `fsync` on Darwin does **not** guarantee the drive flushed its cache).

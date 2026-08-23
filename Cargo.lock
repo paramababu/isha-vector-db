@@ -65,6 +65,125 @@ dependencies = [
 ]
 
 [[package]]
+name = "isha-vector-db-bench"
+version = "0.0.1"
+dependencies = [
+ "isha-vector-db-core",
+ "isha-vector-db-index-flat",
+ "isha-vector-db-index-hnsw",
+ "isha-vector-db-storage-memory",
+ "isha-vector-db-storage-os",
+ "isha-vector-db-testkit",
+ "libc",
+]
+
+[[package]]
+name = "isha-vector-db-cli"
+version = "0.0.1"
+dependencies = [
+ "isha-vector-db-core",
+ "isha-vector-db-format",
+ "isha-vector-db-storage-os",
+]
+
+[[package]]
+name = "isha-vector-db-core"
+version = "0.0.1"
+dependencies = [
+ "isha-vector-db-format",
+ "isha-vector-db-storage-memory",
+ "isha-vector-db-storage-os",
+ "isha-vector-db-testkit",
+]
+
+[[package]]
+name = "isha-vector-db-ffi"
+version = "0.0.1"
+dependencies = [
+ "isha-vector-db-core",
+ "isha-vector-db-format",
+ "isha-vector-db-index-flat",
+ "isha-vector-db-storage-os",
+ "isha-vector-db-storage-web",
+]
+
+[[package]]
+name = "isha-vector-db-format"
+version = "0.0.1"
+
+[[package]]
+name = "isha-vector-db-index-flat"
+version = "0.0.1"
+dependencies = [
+ "isha-vector-db-core",
+ "isha-vector-db-testkit",
+]
+
+[[package]]
+name = "isha-vector-db-index-hnsw"
+version = "0.0.1"
+dependencies = [
+ "isha-vector-db-core",
+ "isha-vector-db-index-flat",
+ "isha-vector-db-storage-memory",
+ "isha-vector-db-testkit",
+]
+
+[[package]]
+name = "isha-vector-db-jni"
+version = "0.0.1"
+dependencies = [
+ "isha-vector-db-core",
+ "isha-vector-db-index-flat",
+ "isha-vector-db-storage-os",
+ "jni",
+]
+
+[[package]]
+name = "isha-vector-db-node"
+version = "0.0.1"
+dependencies = [
+ "isha-vector-db-core",
+ "isha-vector-db-index-flat",
+ "isha-vector-db-storage-os",
+ "napi",
+ "napi-build",
+ "napi-derive",
+]
+
+[[package]]
+name = "isha-vector-db-storage-memory"
+version = "0.0.1"
+dependencies = [
+ "isha-vector-db-core",
+ "isha-vector-db-testkit",
+]
+
+[[package]]
+name = "isha-vector-db-storage-os"
+version = "0.0.1"
+dependencies = [
+ "isha-vector-db-core",
+ "isha-vector-db-testkit",
+ "libc",
+]
+
+[[package]]
+name = "isha-vector-db-storage-web"
+version = "0.0.1"
+dependencies = [
+ "isha-vector-db-core",
+ "isha-vector-db-testkit",
+]
+
+[[package]]
+name = "isha-vector-db-testkit"
+version = "0.0.1"
+dependencies = [
+ "isha-vector-db-core",
+]
+
+[[package]]
 name = "jni"
 version = "0.21.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -303,125 +422,6 @@ name = "unicode-segmentation"
 version = "1.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c6f5d3c3b1bf09027a88a6bc961fc00497d651009560b5463668dc81b0fa87a8"
-
-[[package]]
-name = "vdb-bench"
-version = "0.0.1"
-dependencies = [
- "libc",
- "vdb-core",
- "vdb-index-flat",
- "vdb-index-hnsw",
- "vdb-storage-memory",
- "vdb-storage-os",
- "vdb-testkit",
-]
-
-[[package]]
-name = "vdb-cli"
-version = "0.0.1"
-dependencies = [
- "vdb-core",
- "vdb-format",
- "vdb-storage-os",
-]
-
-[[package]]
-name = "vdb-core"
-version = "0.0.1"
-dependencies = [
- "vdb-format",
- "vdb-storage-memory",
- "vdb-storage-os",
- "vdb-testkit",
-]
-
-[[package]]
-name = "vdb-ffi"
-version = "0.0.1"
-dependencies = [
- "vdb-core",
- "vdb-format",
- "vdb-index-flat",
- "vdb-storage-os",
- "vdb-storage-web",
-]
-
-[[package]]
-name = "vdb-format"
-version = "0.0.1"
-
-[[package]]
-name = "vdb-index-flat"
-version = "0.0.1"
-dependencies = [
- "vdb-core",
- "vdb-testkit",
-]
-
-[[package]]
-name = "vdb-index-hnsw"
-version = "0.0.1"
-dependencies = [
- "vdb-core",
- "vdb-index-flat",
- "vdb-storage-memory",
- "vdb-testkit",
-]
-
-[[package]]
-name = "vdb-jni"
-version = "0.0.1"
-dependencies = [
- "jni",
- "vdb-core",
- "vdb-index-flat",
- "vdb-storage-os",
-]
-
-[[package]]
-name = "vdb-node"
-version = "0.0.1"
-dependencies = [
- "napi",
- "napi-build",
- "napi-derive",
- "vdb-core",
- "vdb-index-flat",
- "vdb-storage-os",
-]
-
-[[package]]
-name = "vdb-storage-memory"
-version = "0.0.1"
-dependencies = [
- "vdb-core",
- "vdb-testkit",
-]
-
-[[package]]
-name = "vdb-storage-os"
-version = "0.0.1"
-dependencies = [
- "libc",
- "vdb-core",
- "vdb-testkit",
-]
-
-[[package]]
-name = "vdb-storage-web"
-version = "0.0.1"
-dependencies = [
- "vdb-core",
- "vdb-testkit",
-]
-
-[[package]]
-name = "vdb-testkit"
-version = "0.0.1"
-dependencies = [
- "vdb-core",
-]
 
 [[package]]
 name = "walkdir"

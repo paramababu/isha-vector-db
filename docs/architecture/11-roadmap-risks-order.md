@@ -47,9 +47,9 @@ are validated earliest.
 4. `error` module: the full `DbError` tree and `ErrorCode` table. Everything else returns these, so
    it is first.
 5. `util`: crc32c, varint, bitmap, ordered float — small, pure, fully unit-tested.
-6. `storage` traits + `vdb-storage-memory` + the storage conformance suite in `vdb-testkit`.
+6. `storage` traits + `isha-vector-db-storage-memory` + the storage conformance suite in `isha-vector-db-testkit`.
    *Now the whole engine can be developed and tested with no filesystem.*
-7. `vdb-format`: file headers, manifest, WAL frames, segment blocks, metadata encoding. Property
+7. `isha-vector-db-format`: file headers, manifest, WAL frames, segment blocks, metadata encoding. Property
    tests, fuzz targets, and the first golden fixtures. **Freeze format v1 here and review it as a
    group** — this is the least reversible decision in the project.
 8. `vector`, `metadata`, `document`, `validation` with the limits table.
@@ -58,22 +58,22 @@ are validated earliest.
 10. Segment writer/reader + dual-slot manifest commit + full recovery. Extend the sweep.
 11. `catalog`, `Database`/`Collection` public API, snapshots, `close` semantics.
 12. `search`: metrics, scalar kernels, `TopK` with tie-breaking, the scoring contract.
-13. `vdb-index-flat` scalar-only, plus the index conformance suite. **First end-to-end search.**
+13. `isha-vector-db-index-flat` scalar-only, plus the index conformance suite. **First end-to-end search.**
 14. `filter` AST, evaluator, and the planner (bitmap vs streaming).
-15. `vdb-storage-os` (positional I/O, locks, platform fsync quirks); run the entire existing test
+15. `isha-vector-db-storage-os` (positional I/O, locks, platform fsync quirks); run the entire existing test
     suite against it unchanged — this is the payoff for step 6, and the proof that the storage
     abstraction is honest.
 16. SIMD kernels behind runtime dispatch, differential-tested against scalar.
 17. `stats`, `verify`, `compact`.
-18. `vdb-cli`: `inspect`/`verify`/`dump`/`compact`/`bench`. Invaluable for every debugging session
+18. `isha-vector-db-cli`: `inspect`/`verify`/`dump`/`compact`/`bench`. Invaluable for every debugging session
     from here on; building it early pays for itself.
 19. `benchmarks/`: harness + first committed baseline. **Ship 0.1.**
 
 **Phase 1.5 — freeze the boundary**
 20. Throwaway second index (LSH or IVF-flat) purely to prove the `VectorIndex` seam, then delete it.
-21. `vdb-ffi`: the C ABI, `cbindgen` header, `catch_unwind` wrappers, ABI conformance tests, ASAN.
+21. `isha-vector-db-ffi`: the C ABI, `cbindgen` header, `catch_unwind` wrappers, ABI conformance tests, ASAN.
     **Freeze `vdb.h`.**
-22. `vdb-node` + `sdk/node` (a shared sdk/typescript package remains planned). Node first: the fastest feedback loop of any
+22. `isha-vector-db-node` + `sdk/node` (a shared sdk/typescript package remains planned). Node first: the fastest feedback loop of any
     binding, and it shakes out ABI ergonomics before four harder platforms depend on them. **0.2.**
 
 **Phase 2 — SDKs, in this order and for these reasons**
@@ -87,7 +87,7 @@ are validated earliest.
 oversampling and the flat fallback. **0.4.**
 
 **Phase 4 — Web.** 31. `vdb-storage-opfs` against the conformance suite, 32. `vdb-wasm` + worker
-RPC + `@vdb/web`, 33. IndexedDB fallback, 34. browser e2e matrix. **0.5.**
+RPC + `@isha-vector-db/web`, 33. IndexedDB fallback, 34. browser e2e matrix. **0.5.**
 
 **Phase 5 — 1.0.** 35. Rehearse a v1→v2 migration end to end (even if v2 is a trivial change) to
 prove `MigrationManager` works before anyone needs it. 36. API review and freeze. 37. Documentation

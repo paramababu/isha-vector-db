@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 echo "building the shared library"
-cargo build -p vdb-ffi --release
+cargo build -p isha-vector-db-ffi --release
 
 echo "running the Python tests"
 python3 -m unittest discover -s sdk/python/tests "$@"

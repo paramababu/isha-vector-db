@@ -1,4 +1,4 @@
-# vdb in React Native
+# isha-vector-db in React Native
 
 > **Read this first.** The native logic is tested (56 C++ checks against the real engine, 11 JS
 > tests), but **nobody has built this into an app**. The JSI value conversion and the iOS and
@@ -17,7 +17,7 @@
 ## Install
 
 ```bash
-npm install @vdb/react-native
+npm install @isha-vector-db/react-native
 cd ios && pod install        # iOS only
 ```
 
@@ -27,7 +27,7 @@ if you forget.
 ## Your first database
 
 ```js
-import { open, Metric } from '@vdb/react-native';
+import { open, Metric } from '@isha-vector-db/react-native';
 import RNFS from 'react-native-fs';
 
 const db = open(`${RNFS.DocumentDirectoryPath}/notes`);
@@ -106,6 +106,6 @@ Neither should be the cache directory: the system deletes it under pressure.
 
 ## If it does not build
 
-The two unverified pieces are the podspec (`sdk/react-native/vdb.podspec`) and the Android CMake
+The two unverified pieces are the podspec (`sdk/react-native/isha-vector-db.podspec`) and the Android CMake
 (`sdk/react-native/android/CMakeLists.txt`). Both are short and commented. The static libraries
 they expect come from `scripts/build-xcframework.sh` and `scripts/build-android.sh`.

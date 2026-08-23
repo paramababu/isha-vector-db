@@ -1,5 +1,5 @@
 {
-  "name": "@vdb/web",
+  "name": "@isha-vector-db/web",
   "version": "0.0.1",
   "description": "vdb for the web: the same engine, compiled to WebAssembly, storing in OPFS.",
   "type": "module",

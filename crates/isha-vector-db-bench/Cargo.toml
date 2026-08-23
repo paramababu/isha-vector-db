@@ -1,0 +1,28 @@
+[package]
+name = "isha-vector-db-bench"
+description = "Benchmark harness for vdb. Emits machine-readable results so trends live in git history."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[[bin]]
+name = "isha-vector-db-bench"
+path = "src/main.rs"
+
+[dependencies]
+isha-vector-db-core.workspace = true
+isha-vector-db-storage-os.workspace = true
+isha-vector-db-storage-memory.workspace = true
+isha-vector-db-index-flat.workspace = true
+isha-vector-db-index-hnsw.workspace = true
+isha-vector-db-testkit.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[lints]
+workspace = true

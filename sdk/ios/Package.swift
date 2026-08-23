@@ -13,15 +13,15 @@ import PackageDescription
 let repoRoot = "../.."
 
 let package = Package(
-    name: "Vdb",
+    name: "IshaVectorDB",
     platforms: [.iOS(.v14), .macOS(.v12)],
     products: [
-        .library(name: "Vdb", targets: ["Vdb"])
+        .library(name: "IshaVectorDB", targets: ["IshaVectorDB"])
     ],
     targets: [
         .target(name: "CVdb"),
         .target(
-            name: "Vdb",
+            name: "IshaVectorDB",
             dependencies: ["CVdb"],
             linkerSettings: [
                 .unsafeFlags([
@@ -30,6 +30,6 @@ let package = Package(
                 ])
             ]
         ),
-        .testTarget(name: "VdbTests", dependencies: ["Vdb"]),
+        .testTarget(name: "IshaVectorDBTests", dependencies: ["IshaVectorDB"]),
     ]
 )

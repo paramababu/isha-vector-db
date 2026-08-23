@@ -54,11 +54,11 @@ Nothing at or below the Public Rust API knows which platform it is running on.
 ## Crates
 
 ```text
-vdb-format ← vdb-core ← { vdb-index-flat, vdb-storage-memory, vdb-storage-os, vdb-storage-opfs, vdb-testkit }
-                     ↖ vdb-ffi → sdk/{react-native, flutter, android, ios}
-                     ↖ vdb-node → sdk/node
+isha-vector-db-format ← isha-vector-db-core ← { isha-vector-db-index-flat, isha-vector-db-storage-memory, isha-vector-db-storage-os, vdb-storage-opfs, isha-vector-db-testkit }
+                     ↖ isha-vector-db-ffi → sdk/{react-native, flutter, android, ios}
+                     ↖ isha-vector-db-node → sdk/node
                      ↖ vdb-wasm → sdk/web
-                     ↖ vdb-cli
+                     ↖ isha-vector-db-cli
 ```
 
 Indexes and storage backends depend on the core, never the reverse — which is what lets a mobile

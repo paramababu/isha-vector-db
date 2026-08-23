@@ -1,6 +1,6 @@
 // The host half of the WebAssembly boundary.
 //
-// `crates/vdb-storage-web` declares a set of imports and calls them for every file operation.
+// `crates/isha-vector-db-storage-web` declares a set of imports and calls them for every file operation.
 // This module implements them, translating pointers into linear memory and delegating the actual
 // storage to an *adapter* — OPFS in a browser, node:fs under test. Keeping the marshalling in one
 // place means the tricky part (pointer arithmetic, the listing encoding, the short-read contract)
@@ -10,7 +10,7 @@
 // module and takes the open database with it, so every call is wrapped and every failure becomes
 // one of the negative codes the Rust side understands.
 
-/** Error codes, mirroring `crates/vdb-storage-web/src/host.rs`. */
+/** Error codes, mirroring `crates/isha-vector-db-storage-web/src/host.rs`. */
 export const CODE = {
   NOT_FOUND: -1,
   ALREADY_EXISTS: -2,
@@ -27,7 +27,7 @@ export const CODE = {
 export const MODE = { READ: 0, READ_WRITE: 1, CREATE: 2, CREATE_NEW: 3 };
 
 /**
- * Build the import object for a vdb WebAssembly instance.
+ * Build the import object for an isha-vector-db WebAssembly instance.
  *
  * @param {object} adapter    Synchronous storage. See `adapters/` for the two implementations.
  * @param {() => WebAssembly.Memory} memory  Read lazily: instantiation needs the imports before

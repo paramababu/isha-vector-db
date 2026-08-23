@@ -1,4 +1,4 @@
-# vdb
+# isha-vector-db
 
 An **embedded, offline-first vector database**. One Rust core with no I/O of its own, one frozen
 C ABI, and thin SDKs for React Native, Flutter, Android, iOS, Node.js and the web.
@@ -15,8 +15,8 @@ things that go wrong on that platform specifically.
 
 ```bash
 pip install vdb                 # Python
-npm install @vdb/node           # Node.js
-npm install @vdb/web            # browsers
+npm install @isha-vector-db/node           # Node.js
+npm install @isha-vector-db/web            # browsers
 ```
 
 Think SQLite, not Milvus: a library your application links against to keep vectors and metadata
@@ -67,21 +67,21 @@ Nothing at or below the public API knows which platform it is on. That is enforc
 | Component | State |
 |---|---|
 | Architecture, ADRs | Done |
-| `vdb-core` error model, paths, utilities, storage traits | Done |
-| `vdb-storage-memory` + storage conformance suite | Done |
-| `vdb-format` — on-disk format v2 (v1 still readable), golden fixtures, fuzz targets | Done |
+| `isha-vector-db-core` error model, paths, utilities, storage traits | Done |
+| `isha-vector-db-storage-memory` + storage conformance suite | Done |
+| `isha-vector-db-format` — on-disk format v2 (v1 still readable), golden fixtures, fuzz targets | Done |
 | Data model: vectors, metadata, documents, ids, limits | Done |
 | Write path: memtable, WAL, replay, crash-sweep suite | Done |
 | Segment flush, manifest commit, full reopen | Done |
 | `Database`/`Collection` public API, CRUD, batches | Done |
 | Search: metrics, top-K, exact scan | Done |
 | Metadata filters | Done |
-| `vdb-storage-os`: the real filesystem backend | Done |
+| `isha-vector-db-storage-os`: the real filesystem backend | Done |
 | Compaction, verification, `vdb` CLI | Done |
 | Benchmark harness and committed baseline | Done |
 | SIMD kernels (NEON, AVX2, simd128) | Done |
 | C ABI (`vdb.h`), frozen and guarded | Done |
-| Node SDK (`@vdb/node`) | Done |
+| Node SDK (`@isha-vector-db/node`) | Done |
 | Android SDK (JNI + Java API) | Done |
 | iOS SDK (Swift + XCFramework) | Done |
 | Metadata filters across the C ABI and Swift | Done |
@@ -93,8 +93,8 @@ Nothing at or below the public API knows which platform it is on. That is enforc
 | Python — ctypes over the C ABI, 19 tests | Done |
 | React Native — JSI bridge, 56 C++ checks + 11 JS tests | Built (JSI glue and packaging unverified) |
 | Flutter | Next |
-| `vdb-index-flat`, search, filters | Not started |
-| `vdb-storage-os` | Not started |
+| `isha-vector-db-index-flat`, search, filters | Not started |
+| `isha-vector-db-storage-os` | Not started |
 | C ABI, SDKs, HNSW, web | Later phases |
 
 Roadmap and ordering: [docs/architecture/11-roadmap-risks-order.md](docs/architecture/11-roadmap-risks-order.md).
@@ -103,9 +103,9 @@ Roadmap and ordering: [docs/architecture/11-roadmap-risks-order.md](docs/archite
 
 ```rust
 use std::sync::Arc;
-use vdb_core::{Database, DatabaseConfig, CollectionSpec, DocumentInput, ManualClock};
-use vdb_core::vector::VectorView;
-use vdb_storage_os::OsStorage;
+use isha_vector_db_core::{Database, DatabaseConfig, CollectionSpec, DocumentInput, ManualClock};
+use isha_vector_db_core::vector::VectorView;
+use isha_vector_db_storage_os::OsStorage;
 
 let db = Database::open(
     Arc::new(OsStorage::open("/path/to/db")?),   // or MemoryStorage for tests
@@ -157,7 +157,7 @@ cd sdk/node && npm test
 ```
 
 ```js
-const vdb = require('@vdb/node');
+const vdb = require('@isha-vector-db/node');
 
 using db = vdb.open('/path/to/db');
 const docs = db.collection('docs', { dimension: 384, metric: 'cosine' });
@@ -237,11 +237,11 @@ knows that and the engine does not.
 ## The `vdb` tool
 
 ```bash
-cargo run -p vdb-cli --example demo -- /tmp/vdb-demo   # build something to look at
-cargo run -p vdb-cli -- stats   /tmp/vdb-demo
-cargo run -p vdb-cli -- verify  /tmp/vdb-demo --full
-cargo run -p vdb-cli -- compact /tmp/vdb-demo
-cargo run -p vdb-cli -- get     /tmp/vdb-demo products doc-0999
+cargo run -p isha-vector-db-cli --example demo -- /tmp/vdb-demo   # build something to look at
+cargo run -p isha-vector-db-cli -- stats   /tmp/vdb-demo
+cargo run -p isha-vector-db-cli -- verify  /tmp/vdb-demo --full
+cargo run -p isha-vector-db-cli -- compact /tmp/vdb-demo
+cargo run -p isha-vector-db-cli -- get     /tmp/vdb-demo products doc-0999
 ```
 
 `stats`, `inspect`, `verify` and `get` open read-only and take no lock, so they work on a
@@ -266,8 +266,8 @@ At 50,000 documents × 384 dimensions, on an Apple M-series laptop:
 **These are a reference point on one machine, not a claim about performance in general.** Mobile
 numbers must come from mobile hardware and do not exist yet.
 
-Search uses the SIMD kernels in `vdb-index-flat`, which are 3.6× faster than the portable
-reference in `vdb-core` on this machine. `Database::open` gives you the reference — correct
+Search uses the SIMD kernels in `isha-vector-db-index-flat`, which are 3.6× faster than the portable
+reference in `isha-vector-db-core` on this machine. `Database::open` gives you the reference — correct
 everywhere, `unsafe`-free, slower; `Database::open_with_index` takes the accelerated one, which
 is what every shipped SDK will pass.
 

@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * @vdb/node — an embedded, offline-first vector database.
+ * @isha-vector-db/node — an embedded, offline-first vector database.
  *
  * A thin layer over the native addon. It exists for two reasons, both of which would otherwise
  * have to be solved four times over in four bindings:
@@ -30,7 +30,7 @@ const native = require('./vdb.node');
  *
  * Parsing the message is not something a caller should ever do, and is acceptable here for one
  * reason: both ends are ours. The `[VDB-nnnn]` prefix is produced by `ErrorCode`'s `Display`,
- * whose format is part of the contract and covered by tests in `vdb-core`.
+ * whose format is part of the contract and covered by tests in `isha-vector-db-core`.
  */
 function attachCode(error) {
   if (!(error instanceof Error)) return error;

@@ -1,1 +1,1 @@
-../../../../../crates/vdb-ffi/include/vdb.h
+../../../../../crates/isha-vector-db-ffi/include/vdb.h

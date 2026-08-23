@@ -1,4 +1,4 @@
-# vdb in C and C++
+# isha-vector-db in C and C++
 
 The C ABI is the contract every other binding is built on — Swift, Java, Node, Python, React
 Native and the browser all go through this header. It is **frozen**: `vdb_abi_version()` returns
@@ -7,23 +7,23 @@ Native and the browser all go through this header. It is **frozen**: `vdb_abi_ve
 ## Build the library
 
 ```bash
-cargo build -p vdb-ffi --release
+cargo build -p isha-vector-db-ffi --release
 ```
 
 That produces, in `target/release/`:
 
 | file | for |
 |---|---|
-| `libvdb_ffi.a` | static linking, which is what you usually want |
-| `libvdb_ffi.dylib` / `.so` / `.dll` | dynamic linking |
+| `libisha_vector_db_ffi.a` | static linking, which is what you usually want |
+| `libisha_vector_db_ffi.dylib` / `.so` / `.dll` | dynamic linking |
 
-The header is `crates/vdb-ffi/include/vdb.h`. It is hand-written, not generated, and a test
+The header is `crates/isha-vector-db-ffi/include/vdb.h`. It is hand-written, not generated, and a test
 asserts that every exported symbol appears in it.
 
 ## Compile against it
 
 ```bash
-cc -I crates/vdb-ffi/include my_app.c target/release/libvdb_ffi.a -o my_app
+cc -I crates/isha-vector-db-ffi/include my_app.c target/release/libisha_vector_db_ffi.a -o my_app
 ```
 
 On Linux add `-lpthread -ldl -lm`. On macOS add `-framework CoreFoundation -framework Security`.
@@ -82,7 +82,7 @@ int main(void) {
 }
 ```
 
-A runnable version is `crates/vdb-ffi/examples/smoke.c`, compiled and executed by
+A runnable version is `crates/isha-vector-db-ffi/examples/smoke.c`, compiled and executed by
 `scripts/check-c-abi.sh`.
 
 ## The five rules

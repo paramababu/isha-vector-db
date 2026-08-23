@@ -8,7 +8,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-PURE_CRATES=(vdb-core vdb-format)
+PURE_CRATES=(isha-vector-db-core isha-vector-db-format)
 
 # Modules that mean "this code talks to the outside world". `std::collections`, `std::sync` and
 # the like are fine — they are data structures, not I/O.
@@ -51,10 +51,10 @@ for crate in "${PURE_CRATES[@]}"; do
     fail=1
   fi
 
-  # Third-party dependencies here need an ADR. Workspace crates (vdb-*) are fine: the layering
-  # is what this script is protecting, not the dependency count.
+  # Third-party dependencies here need an ADR. Workspace crates (isha-vector-db-*) are fine: the
+  # layering is what this script is protecting, not the dependency count.
   deps=$(awk '/^\[dependencies\]/{f=1;next} /^\[/{f=0} f && NF && $0 !~ /^#/' \
-           "crates/$crate/Cargo.toml" | grep -v '^vdb-' || true)
+           "crates/$crate/Cargo.toml" | grep -v '^isha-vector-db-' || true)
   if [[ -n "$deps" ]]; then
     echo "FAIL: $crate has third-party dependencies; each needs an ADR (docs/adr/README.md)."
     echo "$deps" | sed 's/^/       /'

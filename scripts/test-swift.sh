@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 echo "building the static library for the host…"
-cargo build --release -p vdb-ffi
+cargo build --release -p isha-vector-db-ffi
 
 cd sdk/ios
 swift test 2>&1

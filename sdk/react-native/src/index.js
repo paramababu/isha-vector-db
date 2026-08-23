@@ -32,7 +32,7 @@ function hostObject() {
   if (!host) {
     throw new VdbError(
       0,
-      'the vdb native module is not installed. Rebuild the app after adding the package — ' +
+      'the isha-vector-db native module is not installed. Rebuild the app after adding the package — ' +
         'Expo Go cannot load custom native code, so a development build is required.',
     );
   }

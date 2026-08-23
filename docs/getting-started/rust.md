@@ -1,4 +1,4 @@
-# vdb in Rust
+# isha-vector-db in Rust
 
 The engine's own language. No FFI, no marshalling, and the full API rather than the subset the C
 ABI exposes.
@@ -7,14 +7,14 @@ ABI exposes.
 
 ```toml
 [dependencies]
-vdb-core = "0.0.1"
-vdb-storage-os = "0.0.1"     # the filesystem backend
-vdb-index-flat = "0.0.1"     # SIMD exact search
+isha-vector-db-core = "0.0.1"
+isha-vector-db-storage-os = "0.0.1"     # the filesystem backend
+isha-vector-db-index-flat = "0.0.1"     # SIMD exact search
 ```
 
 Rust 1.78 or newer.
 
-`vdb-core` performs no I/O and knows nothing about any platform, so it cannot open a file on its
+`isha-vector-db-core` performs no I/O and knows nothing about any platform, so it cannot open a file on its
 own — you choose a storage backend and hand it in. That is what keeps the engine portable, and it
 is why there are three crates rather than one.
 
@@ -22,13 +22,13 @@ is why there are three crates rather than one.
 
 ```rust
 use std::sync::Arc;
-use vdb_core::api::{CollectionSpec, Database, DatabaseConfig, SearchRequest};
-use vdb_storage_os::{OsStorage, SystemClock};
-use vdb_core::document::DocumentInput;
-use vdb_core::vector::VectorView;
-use vdb_core::Metric;
+use isha_vector_db_core::api::{CollectionSpec, Database, DatabaseConfig, SearchRequest};
+use isha_vector_db_storage_os::{OsStorage, SystemClock};
+use isha_vector_db_core::document::DocumentInput;
+use isha_vector_db_core::vector::VectorView;
+use isha_vector_db_core::Metric;
 
-fn main() -> vdb_core::Result<()> {
+fn main() -> isha_vector_db_core::Result<()> {
     let storage = Arc::new(OsStorage::open("./my-notes")?);
     let db = Database::open(storage, DatabaseConfig::default(), Arc::new(SystemClock))?;
 
@@ -47,7 +47,7 @@ fn main() -> vdb_core::Result<()> {
 }
 ```
 
-`SystemClock` comes from `vdb-storage-os`, not the core. The core takes a `Clock` rather than
+`SystemClock` comes from `isha-vector-db-storage-os`, not the core. The core takes a `Clock` rather than
 reading one because a deterministic test needs a controllable clock — `ManualClock` is what the
 test suite uses — and because `SystemTime::now()` panics outright on `wasm32-unknown-unknown`.
 
@@ -56,7 +56,7 @@ test suite uses — and because `SystemTime::now()` panics outright on `wasm32-u
 The default is an exact scan. Hand in a different index at open time:
 
 ```rust
-use vdb_index_hnsw::HnswIndex;
+use isha_vector_db_index_hnsw::HnswIndex;
 
 let db = Database::open_with_index(
     storage,
@@ -76,7 +76,7 @@ The graph is persisted, so reopening restores it in ~41 ms rather than rebuildin
 ## Batches
 
 ```rust
-use vdb_core::WriteBatch;
+use isha_vector_db_core::WriteBatch;
 
 let mut batch = WriteBatch::with_capacity(1000);
 for (id, vector) in documents {
@@ -92,7 +92,7 @@ and the one the benchmarks measure.
 ## Durability
 
 ```rust
-use vdb_core::persistence::Durability;
+use isha_vector_db_core::persistence::Durability;
 
 DatabaseConfig::default().durability(Durability::Full)     // sync every write
 DatabaseConfig::default().durability(Durability::Batch)    // the default
@@ -105,8 +105,8 @@ markedly slower on flash and is rarely the right trade on a device.
 ## Metadata and filters
 
 ```rust
-use vdb_core::filter::Filter;
-use vdb_core::metadata::{Metadata, Value};
+use isha_vector_db_core::filter::Filter;
+use isha_vector_db_core::metadata::{Metadata, Value};
 
 let mut meta = Metadata::new();
 meta.insert("kind", Value::Str("meeting".into()));
@@ -126,17 +126,17 @@ let hits = notes.search(
 
 | Crate | For |
 |---|---|
-| `vdb-storage-os` | A real filesystem. What you want. |
-| `vdb-storage-memory` | Tests, and power-loss simulation without a disk. |
-| `vdb-storage-web` | WebAssembly, through host functions the embedder supplies. |
+| `isha-vector-db-storage-os` | A real filesystem. What you want. |
+| `isha-vector-db-storage-memory` | Tests, and power-loss simulation without a disk. |
+| `isha-vector-db-storage-web` | WebAssembly, through host functions the embedder supplies. |
 
 Implementing your own means the `Storage`, `File` and `FileLock` traits, and
-`vdb_testkit::storage_conformance` is a 25-check suite that will tell you whether you got it
+`isha_vector_db_testkit::storage_conformance` is a 25-check suite that will tell you whether you got it
 right. It has caught real bugs in the backends shipped here.
 
 ## Errors
 
-`vdb_core::Result<T>` over `DbError`, a tree of about forty-five leaves each carrying a stable
+`isha_vector_db_core::Result<T>` over `DbError`, a tree of about forty-five leaves each carrying a stable
 numeric code.
 
 ```rust

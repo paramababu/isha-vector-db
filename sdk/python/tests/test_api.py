@@ -19,7 +19,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-import vdb  # noqa: E402
+import isha_vector_db as vdb  # noqa: E402
 
 
 class Scratch(unittest.TestCase):

@@ -1,9 +1,9 @@
-# @vdb/react-native
+# @isha-vector-db/react-native
 
 The embedded vector database in a React Native app, over JSI.
 
 ```js
-import { open, Metric } from '@vdb/react-native';
+import { open, Metric } from '@isha-vector-db/react-native';
 
 const db = open(`${documentsDirectory}/notes`);
 const notes = db.collection('notes', 384, Metric.Cosine);

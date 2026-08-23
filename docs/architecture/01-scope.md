@@ -42,7 +42,7 @@ Milvus".
   search hot path.
 - **Deterministic.** Given the same database bytes and the same query, the same build returns the
   same ordered results. (See §6 on cross-architecture float caveats — this is subtler than it looks.)
-- **Dependency-light.** Every third-party crate in `vdb-core` / `vdb-format` must be justified in an
+- **Dependency-light.** Every third-party crate in `isha-vector-db-core` / `isha-vector-db-format` must be justified in an
   ADR. The on-disk format has **zero** third-party codecs (see ADR-0004).
 
 ## 1.4 Explicit non-goals (v1)
@@ -70,13 +70,13 @@ Writing these down is as important as the goals; they are what keep the MVP fini
 
 **In:**
 
-- `vdb-core`: Database, Collection, Document, Vector, Metadata, Filter, Snapshot, error model
-- `vdb-format`: v1 on-disk format, encoders/decoders, golden fixtures, fuzz targets
-- `vdb-storage-memory` (reference + test double), `vdb-storage-os` (std::fs + optional mmap)
-- `vdb-index-flat`: exact brute-force search, SIMD-accelerated with a scalar reference path
+- `isha-vector-db-core`: Database, Collection, Document, Vector, Metadata, Filter, Snapshot, error model
+- `isha-vector-db-format`: v1 on-disk format, encoders/decoders, golden fixtures, fuzz targets
+- `isha-vector-db-storage-memory` (reference + test double), `isha-vector-db-storage-os` (std::fs + optional mmap)
+- `isha-vector-db-index-flat`: exact brute-force search, SIMD-accelerated with a scalar reference path
 - CRUD + batch, cosine/L2/dot, top-K, metadata filtering, threshold
 - WAL + dual-slot manifest + segment files + crash recovery
-- `vdb-cli`: `inspect`, `verify`, `compact`, `bench` — indispensable for debugging the format
+- `isha-vector-db-cli`: `inspect`, `verify`, `compact`, `bench` — indispensable for debugging the format
 - Test suite: unit, integration, property, fuzz, fault-injection recovery, golden-format
 - Benchmark harness producing real numbers (no claims without them)
 - Docs: architecture (this set), format spec, API reference, getting started

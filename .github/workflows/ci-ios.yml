@@ -25,7 +25,7 @@ jobs:
       - name: Every expected slice is present
         run: |
           for slice in ios-arm64 ios-arm64_x86_64-simulator macos-arm64; do
-            test -f "target/xcframework/Vdb.xcframework/$slice/libvdb_ffi.a" \
+            test -f "target/xcframework/Vdb.xcframework/$slice/libisha_vector_db_ffi.a" \
               || { echo "FAIL: missing slice $slice"; exit 1; }
             echo "ok: $slice"
           done
@@ -44,7 +44,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
       - run: rustup target add aarch64-apple-ios-sim
-      - run: cargo build --release -p vdb-ffi --target aarch64-apple-ios-sim
+      - run: cargo build --release -p isha-vector-db-ffi --target aarch64-apple-ios-sim
       - name: Build the Swift package for the simulator
         run: |
           xcodebuild -scheme Vdb -destination 'generic/platform=iOS Simulator' \

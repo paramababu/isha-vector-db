@@ -31,8 +31,8 @@ answer belongs in an ADR.
 **Context.** Metadata and manifests need a serialization format. `serde` + `ciborium`/`postcard`/
 `bincode` would be less code than writing our own.
 
-**Decision.** `vdb-format` implements its own encoders and decoders. No third-party serialization
-crate appears in `vdb-core` or `vdb-format`.
+**Decision.** `isha-vector-db-format` implements its own encoders and decoders. No third-party serialization
+crate appears in `isha-vector-db-core` or `isha-vector-db-format`.
 
 **Reasoning.**
 1. The on-disk bytes are a **published, versioned contract with users' data**. A dependency's minor

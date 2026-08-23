@@ -1,4 +1,4 @@
-# vdb on Android
+# isha-vector-db on Android
 
 Kotlin or Java. The engine is a native library reached through JNI; you write ordinary Java.
 
@@ -41,8 +41,8 @@ val path = File(context.filesDir, "notes").absolutePath
 ## Your first database
 
 ```kotlin
-import dev.vdb.Vdb
-import dev.vdb.Metric
+import dev.isha.vectordb.Vdb
+import dev.isha.vectordb.Metric
 
 val db = Vdb.open(File(context.filesDir, "notes").absolutePath)
 try {
@@ -156,5 +156,5 @@ handles a torn write, but a backup taken between two files is a different thing.
 **ProGuard.** The JNI layer looks up classes by name; keep them:
 
 ```proguard
--keep class dev.vdb.** { *; }
+-keep class dev.isha.vectordb.** { *; }
 ```

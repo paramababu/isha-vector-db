@@ -1,4 +1,4 @@
-# vdb in a browser (React, Vue, plain JavaScript)
+# isha-vector-db in a browser (React, Vue, plain JavaScript)
 
 The engine compiled to WebAssembly, storing in the browser's own filesystem. The database lives on
 the user's device; nothing is uploaded.
@@ -6,14 +6,14 @@ the user's device; nothing is uploaded.
 ## Install
 
 ```bash
-npm install @vdb/web
+npm install @isha-vector-db/web
 ```
 
-You also need to serve `vdb.wasm` (362 KB) as a static asset. Most bundlers handle this with a URL
+You also need to serve `vdb.wasm` (366 KB) as a static asset. Most bundlers handle this with a URL
 import:
 
 ```js
-import wasmUrl from '@vdb/web/vdb.wasm?url';        // Vite
+import wasmUrl from '@isha-vector-db/web/vdb.wasm?url';        // Vite
 ```
 
 ## Run it in a Worker — this is not optional
@@ -27,8 +27,8 @@ Two reasons, and the first is a hard requirement:
 `worker.js`:
 
 ```js
-import { load, Metric } from '@vdb/web';
-import { opfsAdapter } from '@vdb/web/adapters/opfs.js';
+import { load, Metric } from '@isha-vector-db/web';
+import { opfsAdapter } from '@isha-vector-db/web/adapters/opfs.js';
 
 let notes;
 
@@ -113,7 +113,7 @@ synchronously, so they must exist before the engine runs. Raise it if you see
 restricted:
 
 ```js
-import { indexedDbAdapter } from '@vdb/web/adapters/indexeddb.js';
+import { indexedDbAdapter } from '@isha-vector-db/web/adapters/indexeddb.js';
 const adapter = await indexedDbAdapter('my-app');
 ```
 

@@ -1,0 +1,30 @@
+[package]
+name = "isha-vector-db-ffi"
+description = "The stable C ABI for vdb. One contract, consumed by every native SDK."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lib]
+# rlib so the Rust tests can link it; cdylib and staticlib are what the SDKs actually ship.
+crate-type = ["rlib", "cdylib", "staticlib"]
+
+[dependencies]
+isha-vector-db-core.workspace = true
+isha-vector-db-format.workspace = true
+isha-vector-db-index-flat.workspace = true
+
+# The storage backend is chosen by target, not by feature: a build for the web cannot link the
+# OS backend at all (there is no filesystem), and a native build has no use for the host imports
+# the web backend declares, which would be unresolved symbols at link time.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+isha-vector-db-storage-os.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+isha-vector-db-storage-web.workspace = true
+
+[lints]
+workspace = true

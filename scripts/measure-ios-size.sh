@@ -9,7 +9,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 TARGET="${1:-aarch64-apple-darwin}"
-LIB="target/$TARGET/release/libvdb_ffi.a"
+LIB="target/$TARGET/release/libisha_vector_db_ffi.a"
 [[ -f "$LIB" ]] || { echo "FAIL: build $LIB first (scripts/build-xcframework.sh)"; exit 1; }
 
 WORK="$(mktemp -d)"
@@ -37,9 +37,9 @@ cc -Os "$WORK/empty.c" -o "$WORK/empty" -Wl,-dead_strip
 # Both configurations, because the difference is large enough to mislead either way. Xcode
 # passes -dead_strip for release builds, so the stripped figure is the one an application
 # actually pays; the other is what you get if you link the archive by hand and forget.
-cc -Os -I crates/vdb-ffi/include "$WORK/uses.c" "$LIB" -o "$WORK/uses" -Wl,-dead_strip \
+cc -Os -I crates/isha-vector-db-ffi/include "$WORK/uses.c" "$LIB" -o "$WORK/uses" -Wl,-dead_strip \
    -framework Security -framework CoreFoundation
-cc -Os -I crates/vdb-ffi/include "$WORK/uses.c" "$LIB" -o "$WORK/whole" \
+cc -Os -I crates/isha-vector-db-ffi/include "$WORK/uses.c" "$LIB" -o "$WORK/whole" \
    -framework Security -framework CoreFoundation
 strip -x "$WORK/empty" "$WORK/uses" "$WORK/whole" 2>/dev/null
 

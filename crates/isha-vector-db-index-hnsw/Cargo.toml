@@ -1,0 +1,20 @@
+[package]
+name = "isha-vector-db-index-hnsw"
+description = "A hierarchical navigable small world index: approximate nearest neighbours at scale."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+isha-vector-db-core.workspace = true
+isha-vector-db-index-flat.workspace = true
+
+[dev-dependencies]
+isha-vector-db-testkit.workspace = true
+isha-vector-db-storage-memory.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,15 @@
+[package]
+name = "isha-vector-db-testkit"
+description = "Conformance suites, fault injection and data generators shared by vdb's tests, CLI and benchmarks."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+isha-vector-db-core.workspace = true
+
+[lints]
+workspace = true

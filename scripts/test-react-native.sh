@@ -8,26 +8,26 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 echo "building the static library"
-cargo build -p vdb-ffi --release
+cargo build -p isha-vector-db-ffi --release
 
 OUT=$(mktemp -d)
 trap 'rm -rf "$OUT"' EXIT
 
 echo "compiling the bridge and its tests"
 clang++ -std=c++17 -Wall -Wextra -Werror -O1 \
-  -I crates/vdb-ffi/include \
+  -I crates/isha-vector-db-ffi/include \
   -I sdk/react-native/cpp \
   sdk/react-native/cpp/vdb_bridge.cpp \
   sdk/react-native/cpp/test_bridge.cpp \
-  target/release/libvdb_ffi.a \
+  target/release/libisha_vector_db_ffi.a \
   -framework CoreFoundation -framework Security \
   -o "$OUT/test_bridge" 2>/dev/null \
   || clang++ -std=c++17 -Wall -Wextra -Werror -O1 \
-    -I crates/vdb-ffi/include \
+    -I crates/isha-vector-db-ffi/include \
     -I sdk/react-native/cpp \
     sdk/react-native/cpp/vdb_bridge.cpp \
     sdk/react-native/cpp/test_bridge.cpp \
-    target/release/libvdb_ffi.a \
+    target/release/libisha_vector_db_ffi.a \
     -lpthread -ldl -lm \
     -o "$OUT/test_bridge"
 

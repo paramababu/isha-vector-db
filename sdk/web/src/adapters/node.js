@@ -1,6 +1,6 @@
 // A storage adapter over node:fs, for testing the web stack without a browser.
 //
-// This is not shipped to a browser and is not a supported way to run vdb on a server — use the
+// This is not shipped to a browser and is not a supported way to run isha-vector-db on a server — use the
 // native Node addon in `sdk/node` for that, which is faster and has no WebAssembly boundary.
 // What this exists for is to let the host marshalling layer, the wasm module, and the whole
 // engine be tested in ordinary CI, so the browser only has to prove the one thing it uniquely

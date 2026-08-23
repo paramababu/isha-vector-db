@@ -125,7 +125,7 @@
       "p99_us": 25807.6,
       "notes": {
         "warmup_iterations": "25",
-        "kernel": "scalar (vdb-core ExactScan)",
+        "kernel": "scalar (isha-vector-db-core ExactScan)",
         "dimension": "384"
       }
     },

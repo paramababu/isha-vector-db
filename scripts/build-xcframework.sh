@@ -19,7 +19,7 @@ build() {
   local target="$1"
   echo "--- $target"
   rustup target add "$target" >/dev/null 2>&1 || true
-  cargo build --release -p vdb-ffi --target "$target"
+  cargo build --release -p isha-vector-db-ffi --target "$target"
 }
 
 build aarch64-apple-ios
@@ -31,12 +31,12 @@ build aarch64-apple-darwin
 # same platform-and-variant, and Apple Silicon and Intel simulators are both "ios-simulator".
 mkdir -p "$OUT/sim"
 lipo -create \
-  target/aarch64-apple-ios-sim/release/libvdb_ffi.a \
-  target/x86_64-apple-ios/release/libvdb_ffi.a \
-  -output "$OUT/sim/libvdb_ffi.a"
+  target/aarch64-apple-ios-sim/release/libisha_vector_db_ffi.a \
+  target/x86_64-apple-ios/release/libisha_vector_db_ffi.a \
+  -output "$OUT/sim/libisha_vector_db_ffi.a"
 
 mkdir -p "$OUT/headers"
-cp crates/vdb-ffi/include/vdb.h "$OUT/headers/"
+cp crates/isha-vector-db-ffi/include/vdb.h "$OUT/headers/"
 cat > "$OUT/headers/module.modulemap" <<'MODMAP'
 module CVdb {
     header "vdb.h"
@@ -45,9 +45,9 @@ module CVdb {
 MODMAP
 
 xcodebuild -create-xcframework \
-  -library target/aarch64-apple-ios/release/libvdb_ffi.a -headers "$OUT/headers" \
-  -library "$OUT/sim/libvdb_ffi.a" -headers "$OUT/headers" \
-  -library target/aarch64-apple-darwin/release/libvdb_ffi.a -headers "$OUT/headers" \
+  -library target/aarch64-apple-ios/release/libisha_vector_db_ffi.a -headers "$OUT/headers" \
+  -library "$OUT/sim/libisha_vector_db_ffi.a" -headers "$OUT/headers" \
+  -library target/aarch64-apple-darwin/release/libisha_vector_db_ffi.a -headers "$OUT/headers" \
   -output "$OUT/Vdb.xcframework"
 
 echo

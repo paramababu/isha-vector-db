@@ -1,9 +1,9 @@
-# vdb in Node.js
+# isha-vector-db in Node.js
 
 ## Install
 
 ```bash
-npm install @vdb/node
+npm install @isha-vector-db/node
 ```
 
 A native addon, so there is a prebuilt binary per platform. Node 18 or newer.
@@ -19,7 +19,7 @@ That builds the addon and puts it where `sdk/node/index.js` expects it.
 ## Your first database
 
 ```js
-const vdb = require('@vdb/node');
+const vdb = require('@isha-vector-db/node');
 
 const db = vdb.open('./my-notes');
 try {
@@ -137,13 +137,13 @@ run vdb in a worker thread.
 **One process at a time.** A second `open()` on the same directory fails with `VDB-2001` rather
 than waiting.
 
-**This is not the WebAssembly build.** `@vdb/node` is a native addon and is the right choice on a
+**This is not the WebAssembly build.** `@isha-vector-db/node` is a native addon and is the right choice on a
 server. [The web SDK](web.md) exists for browsers and is slower.
 
 ## Complete example
 
 ```js
-const vdb = require('@vdb/node');
+const vdb = require('@isha-vector-db/node');
 const { pipeline } = require('@xenova/transformers');
 
 const embed = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');

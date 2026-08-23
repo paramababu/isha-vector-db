@@ -1,0 +1,25 @@
+[package]
+name = "isha-vector-db-storage-os"
+description = "Filesystem Storage backend for vdb: positional I/O, real durability, and advisory locking on macOS, Linux, Windows, Android and iOS."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+isha-vector-db-core.workspace = true
+
+# A platform crate, so platform dependencies are expected here — unlike isha-vector-db-core and
+# isha-vector-db-format, which CI holds to zero. `libc` buys advisory locks that the kernel releases when
+# the process dies, and F_FULLFSYNC on Darwin. Both are things std does not expose and both are
+# load-bearing for correctness.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+isha-vector-db-testkit.workspace = true
+
+[lints]
+workspace = true

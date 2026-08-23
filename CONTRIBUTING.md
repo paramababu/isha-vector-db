@@ -30,7 +30,7 @@ CI runs all of these plus a cross-compilation matrix. Nothing merges red.
 These are not style preferences. Each one exists because breaking it is expensive to unwind
 after users have data on disk.
 
-1. **Do not mix platform-specific code into the core.** `vdb-core` and `vdb-format` perform no
+1. **Do not mix platform-specific code into the core.** `isha-vector-db-core` and `isha-vector-db-format` perform no
    I/O, forbid `unsafe`, and have no dependencies. `scripts/check-core-purity.sh` enforces all
    three.
 2. **Do not over-engineer the MVP.** A smaller correct thing beats a larger nearly-correct thing.
@@ -44,7 +44,7 @@ after users have data on disk.
 8. **Every feature needs tests**, including its error paths.
 9. **Every storage-format change needs a version bump** and a note in the PR body.
 10. **Every public API change must consider backward compatibility.**
-11. **Avoid dependencies.** Adding one to `vdb-core` or `vdb-format` needs an ADR and will be
+11. **Avoid dependencies.** Adding one to `isha-vector-db-core` or `isha-vector-db-format` needs an ADR and will be
     rejected by CI until that ADR exists.
 12. **Prefer small, well-defined interfaces.**
 13. **A `#[non_exhaustive]` type that callers construct needs a constructor or builders.**
@@ -72,7 +72,7 @@ The behavioural checklist in
 Coverage numbers are published but are not a merge gate — a test that executes code without
 asserting anything is worse than no test, because it looks like protection.
 
-Tests use a seeded RNG (`vdb_testkit::Rng`) so a failure is reproducible from the seed.
+Tests use a seeded RNG (`isha_vector_db_testkit::Rng`) so a failure is reproducible from the seed.
 
 ## Adding a storage backend or an index
 
@@ -81,7 +81,7 @@ Implement the trait, then make its conformance suite pass:
 ```rust
 #[test]
 fn my_backend_is_conformant() {
-    vdb_testkit::storage_conformance(&|| Box::new(MyStorage::new())).assert_ok();
+    isha_vector_db_testkit::storage_conformance(&|| Box::new(MyStorage::new())).assert_ok();
 }
 ```
 

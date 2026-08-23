@@ -278,4 +278,4 @@ onto `pread`/`pwrite`, `FileHandle.read(at:)` and OPFS `FileSystemSyncAccessHand
 `capabilities()` exists because the browser cannot do everything a POSIX filesystem can. The engine
 adapts its commit protocol to the declared capabilities rather than each storage backend faking
 POSIX semantics badly. Any capability an implementation reports must be honestly implemented —
-`vdb-testkit` ships a conformance suite (§8.4) that every backend must pass.
+`isha-vector-db-testkit` ships a conformance suite (§8.4) that every backend must pass.

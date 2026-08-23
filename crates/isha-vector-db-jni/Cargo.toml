@@ -1,0 +1,22 @@
+[package]
+name = "isha-vector-db-jni"
+description = "JNI shim for vdb. Contains no logic: it converts Java types to Rust ones and calls the engine."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+isha-vector-db-core.workspace = true
+isha-vector-db-index-flat.workspace = true
+isha-vector-db-storage-os.workspace = true
+jni = "0.21"
+
+[lints]
+workspace = true

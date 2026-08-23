@@ -1,22 +1,22 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/vdb-bench",
-    "crates/vdb-cli",
-    "crates/vdb-core",
-    "crates/vdb-ffi",
-    "crates/vdb-format",
-    "crates/vdb-index-flat",
-  "crates/vdb-index-hnsw",
-    "crates/vdb-jni",
-    "crates/vdb-node",
-    "crates/vdb-storage-memory",
-    "crates/vdb-storage-os",
-  "crates/vdb-storage-web",
-    "crates/vdb-testkit",
+    "crates/isha-vector-db-bench",
+    "crates/isha-vector-db-cli",
+    "crates/isha-vector-db-core",
+    "crates/isha-vector-db-ffi",
+    "crates/isha-vector-db-format",
+    "crates/isha-vector-db-index-flat",
+  "crates/isha-vector-db-index-hnsw",
+    "crates/isha-vector-db-jni",
+    "crates/isha-vector-db-node",
+    "crates/isha-vector-db-storage-memory",
+    "crates/isha-vector-db-storage-os",
+  "crates/isha-vector-db-storage-web",
+    "crates/isha-vector-db-testkit",
 ]
 
-exclude = ["crates/vdb-format/fuzz"]
+exclude = ["crates/isha-vector-db-format/fuzz"]
 
 [workspace.package]
 version = "0.0.1"
@@ -27,14 +27,14 @@ repository = "https://github.com/OWNER/vdb"
 authors = ["vdb contributors"]
 
 [workspace.dependencies]
-vdb-core = { path = "crates/vdb-core", version = "0.0.1" }
-vdb-format = { path = "crates/vdb-format", version = "0.0.1" }
-vdb-index-flat = { path = "crates/vdb-index-flat", version = "0.0.1" }
-vdb-index-hnsw = { path = "crates/vdb-index-hnsw", version = "0.0.1" }
-vdb-storage-memory = { path = "crates/vdb-storage-memory", version = "0.0.1" }
-vdb-storage-os = { path = "crates/vdb-storage-os", version = "0.0.1" }
-vdb-storage-web = { path = "crates/vdb-storage-web", version = "0.0.1" }
-vdb-testkit = { path = "crates/vdb-testkit", version = "0.0.1" }
+isha-vector-db-core = { path = "crates/isha-vector-db-core", version = "0.0.1" }
+isha-vector-db-format = { path = "crates/isha-vector-db-format", version = "0.0.1" }
+isha-vector-db-index-flat = { path = "crates/isha-vector-db-index-flat", version = "0.0.1" }
+isha-vector-db-index-hnsw = { path = "crates/isha-vector-db-index-hnsw", version = "0.0.1" }
+isha-vector-db-storage-memory = { path = "crates/isha-vector-db-storage-memory", version = "0.0.1" }
+isha-vector-db-storage-os = { path = "crates/isha-vector-db-storage-os", version = "0.0.1" }
+isha-vector-db-storage-web = { path = "crates/isha-vector-db-storage-web", version = "0.0.1" }
+isha-vector-db-testkit = { path = "crates/isha-vector-db-testkit", version = "0.0.1" }
 
 [workspace.lints.rust]
 missing_debug_implementations = "warn"

@@ -7,9 +7,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 echo "building the static library…"
-cargo build --release -p vdb-ffi
+cargo build --release -p isha-vector-db-ffi
 
-LIB="target/release/libvdb_ffi.a"
+LIB="target/release/libisha_vector_db_ffi.a"
 [[ -f "$LIB" ]] || { echo "FAIL: $LIB was not produced"; exit 1; }
 
 # Rust's std needs a few system libraries when linked into a C binary.
@@ -22,8 +22,8 @@ esac
 OUT="$(mktemp -d)/smoke"
 echo "compiling examples/smoke.c against include/vdb.h…"
 cc -Wall -Wextra -Werror -std=c11 \
-   -I crates/vdb-ffi/include \
-   crates/vdb-ffi/examples/smoke.c "$LIB" -o "$OUT" "${EXTRA[@]}"
+   -I crates/isha-vector-db-ffi/include \
+   crates/isha-vector-db-ffi/examples/smoke.c "$LIB" -o "$OUT" "${EXTRA[@]}"
 
 rm -rf /tmp/vdb-c-smoke
 echo "running…"

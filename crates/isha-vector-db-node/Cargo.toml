@@ -1,0 +1,30 @@
+[package]
+name = "isha-vector-db-node"
+description = "Node.js addon for vdb, built on N-API."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+isha-vector-db-core.workspace = true
+isha-vector-db-index-flat.workspace = true
+isha-vector-db-storage-os.workspace = true
+
+# N-API rather than the V8 API, so one prebuilt binary works across Node major versions instead
+# of needing a rebuild per release. That is the difference between shipping prebuilt binaries
+# and putting node-gyp in every user's install path.
+napi = { version = "2", features = ["napi6"] }
+napi-derive = "2"
+
+[build-dependencies]
+napi-build = "2"
+
+[lints]
+workspace = true

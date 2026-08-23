@@ -40,7 +40,7 @@ jobs:
         # Android 15 runs on devices with 16 KB memory pages, and a library linked for 4 KB will
         # not load there at all — a failure discovered by a one-star review rather than a test.
         run: |
-          for so in sdk/android/src/main/jniLibs/*/libvdb_jni.so; do
+          for so in sdk/android/src/main/jniLibs/*/libisha_vector_db_jni.so; do
             align=$(readelf -lW "$so" | awk '/LOAD/ {print $NF; exit}')
             echo "$so: $align"
             if [[ "$align" != "0x4000" && "$align" != "0x10000" ]]; then
@@ -50,7 +50,7 @@ jobs:
           done
       - name: Size budget per ABI
         run: |
-          for so in sdk/android/src/main/jniLibs/*/libvdb_jni.so; do
+          for so in sdk/android/src/main/jniLibs/*/libisha_vector_db_jni.so; do
             bytes=$(stat -c%s "$so")
             echo "$so: $bytes bytes"
             if [[ $bytes -gt $((1500 * 1024)) ]]; then

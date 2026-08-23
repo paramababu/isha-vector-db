@@ -1,8 +1,8 @@
 # Benchmarks
 
 ```bash
-cargo run --release -p vdb-bench -- --standard
-cargo run --release -p vdb-bench -- --quick --json results/local.json
+cargo run --release -p isha-vector-db-bench -- --standard
+cargo run --release -p isha-vector-db-bench -- --quick --json results/local.json
 ```
 
 Rule 15 of the [engineering rules](../CONTRIBUTING.md) is "benchmark before making performance

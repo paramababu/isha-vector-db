@@ -1,9 +1,9 @@
-# vdb in Python
+# isha-vector-db in Python
 
 ## Install
 
 ```bash
-pip install vdb
+pip install isha-vector-db
 ```
 
 Nothing to compile and no dependencies. The binding is `ctypes` over the engine's C ABI, so the
@@ -16,17 +16,17 @@ Python 3.9 or newer.
 If you are working on the engine itself, build it and point Python at your build:
 
 ```bash
-cargo build -p vdb-ffi --release
+cargo build -p isha-vector-db-ffi --release
 export PYTHONPATH=sdk/python
 ```
 
 The binding looks for the library next to itself, then in `target/release`, then
-`target/debug`. `VDB_LIBRARY=/path/to/libvdb_ffi.dylib` overrides all of that.
+`target/debug`. `ISHA_VECTOR_DB_LIBRARY=/path/to/libisha_vector_db_ffi.dylib` overrides all of that.
 
 ## Your first database
 
 ```python
-import vdb
+import isha_vector_db as vdb
 
 with vdb.open("./my-notes") as db:
     notes = db.collection("notes", dimension=4)
@@ -53,12 +53,12 @@ something raises — and a lock left held is the most common way to be unable to
 
 ## With real embeddings
 
-`vdb` never imports NumPy, but a NumPy array works because it exposes the buffer protocol, which
+The package never imports NumPy, but a NumPy array works because it exposes the buffer protocol, which
 is the fast path — no per-element conversion.
 
 ```python
 import numpy as np
-import vdb
+import isha_vector_db as vdb
 
 vectors = model.encode(documents)          # (n, 384) float32
 assert vectors.dtype == np.float32          # float64 would be silently wrong
@@ -141,7 +141,7 @@ process.
 """Semantic search over a directory of text files."""
 import pathlib
 import numpy as np
-import vdb
+import isha_vector_db as vdb
 from sentence_transformers import SentenceTransformer
 
 model = SentenceTransformer("all-MiniLM-L6-v2")   # 384 dimensions
