@@ -11,6 +11,29 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
 
 ### Changed
 
+- **CI audit.** Eleven workflows had never run, and the rename had just touched all of them.
+  Auditing them found four real breaks:
+
+  - `xcodebuild -scheme Vdb` — the scheme is now `IshaVectorDB`.
+  - `npm test` was **broken in `sdk/web` and `sdk/react-native`**: `node --test test/` makes
+    current Node try to resolve `test` as a module. Both now use the glob `sdk/node` already used.
+  - `ci-web.yml` required the committed `vdb.wasm` to be **byte-identical** to a fresh build. It
+    cannot be — CI builds on Linux with a different rustc patch release — so that job would have
+    failed on every run and taught everyone to ignore it. It now checks the two things that
+    matter and are checkable: that the committed module runs, and that it is not from an older
+    release.
+  - **Python and React Native ran in no workflow at all** — 19 tests and 56 C++ checks executing
+    nowhere. Added `ci-python.yml` (a three-version, two-OS matrix, because a wrong ctypes
+    signature fails at runtime rather than at build time) and `ci-react-native.yml`.
+
+- **Corrected an overclaim about installation.** The pages said `pip install` gave you a wheel
+  containing a prebuilt engine. Building the wheel showed it is `py3-none-any` and contains only
+  two `.py` files, so an install would have found no library at all. Nothing is on PyPI, npm,
+  Maven Central or CocoaPods yet, and every page now says so and points at why: publishing needs
+  a per-platform binary build that does not exist. The CI wheel check asserts what is true today
+  and will fail when that changes, which is the point.
+
+
 - **Renamed from `vdb` to `isha-vector-db`**, matching the repository. Everything user-facing
   moves; the C ABI does not.
 

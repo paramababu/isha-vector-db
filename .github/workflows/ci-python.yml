@@ -1,0 +1,61 @@
+name: python
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    # Every version the package claims to support, because the binding is ctypes and a
+    # signature that is wrong for one of them is wrong at runtime rather than at build time —
+    # there is no compiler between the declarations and the library.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ["3.9", "3.12", "3.13"]
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Builds the shared library and runs the tests against it. Nothing is mocked: every test
+      # opens a real database on disk.
+      - name: Build and test
+        run: ./scripts/test-python.sh
+
+      # The package must build from its own metadata, not only run from the source tree: a
+      # broken packages= or package-data rule is invisible until someone pip-installs it.
+      #
+      # This asserts what is true today, which is that the wheel is pure Python and does NOT
+      # bundle the shared library — publishing to PyPI needs a per-platform wheel build that does
+      # not exist yet. When that lands, this check is where the expectation changes, and it will
+      # fail until it is updated, which is the point.
+      - name: The package builds a wheel
+        run: |
+          python -m pip install --upgrade pip build
+          cd sdk/python && python -m build --wheel
+          python - <<'EOF'
+          import glob, zipfile
+          wheel = glob.glob('dist/*.whl')[0]
+          names = zipfile.ZipFile(wheel).namelist()
+          print(wheel)
+          for n in names:
+              print(' ', n)
+          assert any(n.startswith('isha_vector_db/') for n in names), 'the package is missing'
+          assert 'isha_vector_db/__init__.py' in names
+          assert 'isha_vector_db/_ffi.py' in names
+          bundled = [n for n in names if n.endswith(('.so', '.dylib', '.dll'))]
+          assert not bundled, (
+              'this wheel bundles a shared library: ' + str(bundled) + '\n'
+              'That is the intended end state, but it makes py3-none-any the wrong tag. '
+              'Update the packaging to build per-platform wheels, and update this check.'
+          )
+          EOF

@@ -21,6 +21,9 @@ targets: [
 ]
 ```
 
+> **The package is not tagged for release yet.** Build from a checkout for now — see below,
+> and [why](README.md#not-yet-published).
+
 iOS 13.4 or newer. The package carries a prebuilt `XCFramework`, so there is nothing to compile
 and no bridging header.
 

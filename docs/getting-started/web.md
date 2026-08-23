@@ -9,6 +9,9 @@ the user's device; nothing is uploaded.
 npm install @isha-vector-db/web
 ```
 
+> **Not published yet.** Build from a checkout for now — see below, and
+> [why](README.md#not-yet-published).
+
 You also need to serve `vdb.wasm` (366 KB) as a static asset. Most bundlers handle this with a URL
 import:
 

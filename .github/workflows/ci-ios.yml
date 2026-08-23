@@ -47,6 +47,6 @@ jobs:
       - run: cargo build --release -p isha-vector-db-ffi --target aarch64-apple-ios-sim
       - name: Build the Swift package for the simulator
         run: |
-          xcodebuild -scheme Vdb -destination 'generic/platform=iOS Simulator' \
+          xcodebuild -scheme IshaVectorDB -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath /tmp/dd build 2>&1 | tail -5
         working-directory: sdk/ios

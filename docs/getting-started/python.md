@@ -6,22 +6,30 @@
 pip install isha-vector-db
 ```
 
-Nothing to compile and no dependencies. The binding is `ctypes` over the engine's C ABI, so the
-wheel contains a prebuilt shared library and installs in seconds.
+Python 3.9 or newer. No Python dependencies at all — the binding is `ctypes` over the engine's C
+ABI, so there is nothing to compile at install time and no build toolchain required.
 
-Python 3.9 or newer.
+> **Not yet on PyPI, and the wheel does not bundle the engine.** The published package would need
+> a per-platform wheel build (the shared library differs on Linux, macOS and Windows), and that
+> pipeline does not exist yet — the current wheel is `py3-none-any` and contains only the Python
+> files. Until then, build the library and point at it:
+>
+> ```bash
+> cargo build -p isha-vector-db-ffi --release
+> export PYTHONPATH=/path/to/isha-vector-db/sdk/python
+> ```
+>
+> The binding finds a `target/release` build automatically from a checkout.
 
-### From a checkout
+### Where it looks for the engine
 
-If you are working on the engine itself, build it and point Python at your build:
+In order: next to the package (where a bundled wheel would put it), then `target/release` and
+`target/debug` relative to a checkout, then wherever the system loader can find it.
+`ISHA_VECTOR_DB_LIBRARY=/path/to/libisha_vector_db_ffi.dylib` overrides all of that, which is
+what you want while working on the engine itself.
 
-```bash
-cargo build -p isha-vector-db-ffi --release
-export PYTHONPATH=sdk/python
-```
-
-The binding looks for the library next to itself, then in `target/release`, then
-`target/debug`. `ISHA_VECTOR_DB_LIBRARY=/path/to/libisha_vector_db_ffi.dylib` overrides all of that.
+A missing library is the most likely first failure, so the error lists every path it tried rather
+than leaving `OSError` to be interpreted.
 
 ## Your first database
 

@@ -21,6 +21,9 @@ configure and no NDK needed to *use* it.
 
 Minimum SDK 21.
 
+> **Not published to Maven Central yet.** Build from a checkout for now — see below, and
+> [why](README.md#not-yet-published).
+
 ### From a checkout
 
 ```bash

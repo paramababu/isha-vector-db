@@ -6,7 +6,7 @@
   "main": "src/vdb.js",
   "files": ["src", "vdb.wasm", "README.md"],
   "scripts": {
-    "test": "node --test test/"
+    "test": "node --test \"test/**/*.test.js\""
   },
   "license": "Apache-2.0"
 }

@@ -16,6 +16,17 @@ read any of the others.
 | **C / C++** | [c.md](c.md) | Working, frozen ABI |
 | Flutter | — | Not built |
 
+## Not yet published
+
+**Nothing here is on a package registry yet** — not PyPI, npm, Maven Central or CocoaPods. The
+install command at the top of each page is what it *will* be; today you build from a checkout,
+and each page says how.
+
+That is not an oversight to be fixed by typing `npm publish`. Publishing means a per-platform
+binary build for every target — the shared library differs on Linux, macOS, Windows, Android and
+iOS — and that pipeline does not exist. The pages are written for the published form because the
+API will not change when it lands; only the first command will.
+
 ## What this is, in one paragraph
 
 An embedded vector database. It runs inside your process against files on a disk, like SQLite —

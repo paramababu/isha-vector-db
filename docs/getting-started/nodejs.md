@@ -6,6 +6,9 @@
 npm install @isha-vector-db/node
 ```
 
+> **Not published yet.** Build from a checkout for now — see below, and
+> [why](README.md#not-yet-published).
+
 A native addon, so there is a prebuilt binary per platform. Node 18 or newer.
 
 ### From a checkout

@@ -21,6 +21,9 @@ npm install @isha-vector-db/react-native
 cd ios && pod install        # iOS only
 ```
 
+> **Not published yet.** Build from a checkout for now — see below, and
+> [why](README.md#not-yet-published).
+
 Rebuild the app. A JS-only reload will not pick up new native code, and the error message says so
 if you forget.
 

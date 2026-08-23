@@ -1,0 +1,29 @@
+name: react-native
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  bridge:
+    # The half of the native layer that can run without a device — and deliberately the half
+    # that holds the logic. cpp/vdb_jsi.cpp needs React Native's JSI headers to compile at all
+    # and is not covered here; sdk/react-native/README.md says so plainly.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: Swatinem/rust-cache@v2
+
+      # Compiles vdb_bridge.cpp against the real static library and runs it: handle lifetimes,
+      # error translation, use-after-close, persistence across a reopen.
+      - name: C++ bridge and JavaScript API
+        run: ./scripts/test-react-native.sh
