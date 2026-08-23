@@ -8,7 +8,7 @@ version = "0.0.1"
 description = "An embedded, offline-first vector database. No server, no dependencies."
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 # Deliberately none. The binding is ctypes over the C ABI, so there is nothing to compile at
 # install time and nothing to keep in step with a NumPy or PyTorch version. NumPy arrays work
 # because they expose the buffer protocol, not because this package imports NumPy.
@@ -23,3 +23,4 @@ packages = ["isha_vector_db"]
 [tool.setuptools.package-data]
 # The shared library is bundled into the wheel, one per platform.
 isha_vector_db = ["*.so", "*.dylib", "*.dll"]
+

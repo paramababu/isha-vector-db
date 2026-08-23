@@ -1,0 +1,251 @@
+name: release
+
+# Publishing is triggered by a tag, and every artefact is built by this workflow rather than by
+# whoever happens to be tagging. A binary built on a maintainer's laptop is unreproducible, is
+# linked against whatever that laptop had, and is the reason "works for me" reaches a registry.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build and check everything, publish nothing"
+        type: boolean
+        default: true
+
+env:
+  # Set false only by a tag push. A manual run defaults to building without publishing, because
+  # a registry upload cannot be undone: PyPI and npm refuse a re-upload of the same version, and
+  # a wrong artefact means burning a version number.
+  PUBLISH: ${{ github.event_name == 'push' && 'true' || 'false' }}
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Everything must be green before anything is built for release.
+  # ---------------------------------------------------------------------------
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+      - run: ./scripts/check-core-purity.sh
+      - run: ./scripts/check-references.sh
+
+      # The tag must match the version in Cargo.toml. Publishing v0.2.0 from a tree that says
+      # 0.1.0 produces a release nobody can reproduce from the tag.
+      - name: The tag matches the version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF#refs/tags/v}"
+          version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          echo "tag=$tag version=$version"
+          test "$tag" = "$version" || {
+            echo "tag v$tag does not match Cargo.toml version $version"; exit 1; }
+
+  # ---------------------------------------------------------------------------
+  # Python: one wheel per platform, each carrying that platform's library.
+  # ---------------------------------------------------------------------------
+  python-wheels:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-14,      target: aarch64-apple-darwin,      lib: libisha_vector_db_ffi.dylib }
+          - { os: macos-13,      target: x86_64-apple-darwin,       lib: libisha_vector_db_ffi.dylib }
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu,  lib: libisha_vector_db_ffi.so }
+          - { os: windows-latest, target: x86_64-pc-windows-msvc,   lib: isha_vector_db_ffi.dll }
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build the engine
+        run: cargo build -p isha-vector-db-ffi --release --target ${{ matrix.target }}
+
+      # setup.py tags the wheel by platform only when a library is present, so this copy is what
+      # turns a portable wheel into a correct one.
+      - name: Bundle the library and build the wheel
+        shell: bash
+        run: |
+          cp "target/${{ matrix.target }}/release/${{ matrix.lib }}" sdk/python/isha_vector_db/
+          python -m pip install --upgrade pip build
+          cd sdk/python && python -m build --wheel
+
+      - name: The wheel is platform-tagged and works
+        shell: bash
+        run: |
+          cd sdk/python
+          wheel=$(ls dist/*.whl)
+          echo "$wheel"
+          case "$wheel" in
+            *-any.whl)
+              echo "the wheel is tagged 'any' but carries a platform library"; exit 1 ;;
+          esac
+          python -m pip install "$wheel"
+          cd "$RUNNER_TEMP" && python -c "
+          import isha_vector_db as vdb, tempfile
+          with vdb.open(tempfile.mkdtemp()) as db:
+              c = db.collection('docs', dimension=3)
+              c.upsert('a', [1.0, 0.0, 0.0])
+              assert c.search([1.0, 0.0, 0.0], k=1)[0].id == 'a'
+          print('the installed wheel works')
+          "
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.target }}
+          path: sdk/python/dist/*.whl
+
+  # ---------------------------------------------------------------------------
+  # Node: one addon package per platform, resolved by npm's os/cpu constraints.
+  # ---------------------------------------------------------------------------
+  node-addons:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-14,       target: aarch64-apple-darwin,      npm: darwin-arm64 }
+          - { os: macos-13,       target: x86_64-apple-darwin,       npm: darwin-x64 }
+          - { os: ubuntu-latest,  target: x86_64-unknown-linux-gnu,  npm: linux-x64 }
+          - { os: windows-latest, target: x86_64-pc-windows-msvc,    npm: win32-x64 }
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build the addon
+        shell: bash
+        run: |
+          cargo build -p isha-vector-db-node --release --target ${{ matrix.target }}
+          out="target/${{ matrix.target }}/release"
+          for f in libisha_vector_db_node.dylib libisha_vector_db_node.so isha_vector_db_node.dll; do
+            [ -f "$out/$f" ] && cp "$out/$f" "sdk/node/npm/${{ matrix.npm }}/vdb.node" && break
+          done
+          test -f "sdk/node/npm/${{ matrix.npm }}/vdb.node"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: addon-${{ matrix.npm }}
+          path: sdk/node/npm/${{ matrix.npm }}/vdb.node
+
+  # ---------------------------------------------------------------------------
+  # WebAssembly: one artefact for every platform, because wasm has none.
+  # ---------------------------------------------------------------------------
+  web:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - uses: Swatinem/rust-cache@v2
+      - run: rustup target add wasm32-unknown-unknown
+      - run: ./scripts/build-web.sh
+      - uses: actions/upload-artifact@v4
+        with: { name: wasm, path: sdk/web/vdb.wasm }
+
+  # ---------------------------------------------------------------------------
+  # Publishing. Each registry is separate so that one failing does not leave the
+  # others half-done — and so a missing secret stops that registry alone.
+  # ---------------------------------------------------------------------------
+  publish-crates:
+    needs: [python-wheels, node-addons, web]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      # Order matters: a crate cannot be published before the crates it depends on. This is the
+      # dependency order, deepest first.
+      - name: Publish in dependency order
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          for crate in isha-vector-db-format isha-vector-db-core \
+                       isha-vector-db-index-flat isha-vector-db-index-hnsw \
+                       isha-vector-db-storage-memory isha-vector-db-storage-os \
+                       isha-vector-db-storage-web isha-vector-db-testkit \
+                       isha-vector-db-ffi isha-vector-db-cli; do
+            echo "publishing $crate"
+            cargo publish -p "$crate" --no-verify
+            # crates.io needs a moment before a dependent crate can resolve the new version.
+            sleep 30
+          done
+
+  publish-pypi:
+    needs: [python-wheels]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    # Trusted publishing: no long-lived token in the repository's secrets.
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { pattern: wheel-*, path: dist, merge-multiple: true }
+      - run: ls -la dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  publish-npm:
+    needs: [node-addons, web]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", registry-url: "https://registry.npmjs.org" }
+      - uses: actions/download-artifact@v4
+        with: { path: /tmp/artifacts }
+
+      - name: Publish the platform packages, then the ones that depend on them
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          for dir in sdk/node/npm/*/; do
+            name=$(basename "$dir")
+            src="/tmp/artifacts/addon-$name/vdb.node"
+            if [ ! -f "$src" ]; then
+              echo "no addon built for $name; skipping"
+              continue
+            fi
+            cp "$src" "$dir/vdb.node"
+            (cd "$dir" && npm publish --access public)
+          done
+
+          cp /tmp/artifacts/wasm/vdb.wasm sdk/web/vdb.wasm
+          (cd sdk/web && npm publish --access public)
+          (cd sdk/react-native && npm publish --access public)
+          # Last: it declares the platform packages as optional dependencies, and npm resolves
+          # them at install time, so they must already exist.
+          (cd sdk/node && npm publish --access public)
+
+  github-release:
+    needs: [python-wheels, node-addons, web]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: /tmp/artifacts }
+      - name: Collect
+        run: |
+          mkdir -p release
+          find /tmp/artifacts -type f \( -name '*.whl' -o -name '*.wasm' \) -exec cp {} release/ \;
+          cp crates/isha-vector-db-ffi/include/vdb.h release/
+          ls -la release
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true

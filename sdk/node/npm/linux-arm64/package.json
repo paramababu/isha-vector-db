@@ -1,0 +1,16 @@
+{
+  "name": "@isha-vector-db/node-linux-arm64",
+  "version": "0.0.1",
+  "description": "The isha-vector-db native addon for linux-arm64.",
+  "license": "Apache-2.0",
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "main": "vdb.node",
+  "files": [
+    "vdb.node"
+  ]
+}

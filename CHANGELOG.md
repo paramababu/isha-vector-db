@@ -85,6 +85,31 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
 
 ### Added
 
+- **A release pipeline** (`.github/workflows/release.yml`) and [`RELEASING.md`]. Publishing is a
+  tag push; every artefact is built on the platform it targets, because a binary built on a
+  maintainer's laptop is unreproducible and linked against whatever that laptop had.
+
+  Two packaging defects had to be fixed before publishing could be anything but harmful, since
+  registries are immutable:
+
+  - **The Python wheel was `py3-none-any` with no engine in it.** `pip install` would have given
+    people a package that fails at `import`. `sdk/python/setup.py` now tags the wheel by platform
+    and the library is bundled per target; a wheel built and installed into a clean virtualenv
+    was verified to work. CI fails the build if a wheel carrying a library is tagged `any`.
+  - **`@isha-vector-db/node` shipped a single macOS-arm64 addon**, so it would have been broken
+    on every other platform. It now uses the platform-package pattern esbuild and swc use — one
+    `@isha-vector-db/node-<platform>` package each, declared as optional dependencies with `os`
+    and `cpu` set, so npm downloads only the matching one. A missing addon now names the platform
+    instead of saying "cannot find module".
+
+  `RELEASING.md` states plainly what only a human with accounts can do, and what is not ready:
+  Maven Central needs a Sonatype namespace and GPG signing and the AAR is not built by CI at all;
+  CocoaPods needs a published XCFramework and the podspec has never been through `pod install`;
+  and **pub.dev is not applicable** because no Dart package exists.
+
+[`RELEASING.md`]: RELEASING.md
+
+
 - **Getting-started documentation, one self-contained page per platform**
   ([docs/getting-started](docs/getting-started/)): Python, Node.js, React/web, React Native,
   Android, iOS, Rust, and C. Each has install steps, a first program, the operations you actually

@@ -16,3 +16,17 @@ sdk/android/src/main/jniLibs/
 # iOS build artifacts.
 target/xcframework/
 sdk/ios/.build/
+
+# Python build artefacts. The bundled shared library is produced per platform at release time
+# and must never be committed: it would be one architecture's binary in everyone's checkout.
+__pycache__/
+*.py[cod]
+sdk/python/dist/
+sdk/python/build/
+sdk/python/*.egg-info/
+sdk/python/isha_vector_db/*.so
+sdk/python/isha_vector_db/*.dylib
+sdk/python/isha_vector_db/*.dll
+
+# Node platform packages are filled in by the release workflow.
+sdk/node/npm/*/vdb.node
