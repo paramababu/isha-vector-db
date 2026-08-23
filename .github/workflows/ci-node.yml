@@ -38,8 +38,12 @@ jobs:
       - run: ./scripts/build-node.sh
       - name: The same binary under 18, 20 and 22
         run: |
+          # An explicit file, not a glob and not a directory. `--test <glob>` needs Node 21, and
+          # `--test <dir>` is rejected by Node 24 — so a job whose entire purpose is to run three
+          # Node versions must use the one form all of them accept. This job previously used a
+          # glob and failed on 18 for that reason.
           for v in 18 20 22; do
             echo "--- node $v ---"
-            npx --yes node@$v --test "test/**/*.test.js"
+            npx --yes node@$v --test test/api.test.js
           done
         working-directory: sdk/node

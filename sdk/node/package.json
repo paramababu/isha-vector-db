@@ -16,7 +16,7 @@
   },
   "scripts": {
     "build": "../../scripts/build-node.sh",
-    "test": "node --test \"test/**/*.test.js\""
+    "test": "node --test test/api.test.js"
   },
   "optionalDependencies": {
     "@isha-vector-db/node-darwin-arm64": "0.0.1",
