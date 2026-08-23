@@ -60,7 +60,7 @@ thing that changed.
   |---|---|---|
   | Rust crates | `vdb-core`, `vdb-ffi`, … | `isha-vector-db-core`, `isha-vector-db-ffi`, … |
   | Python | `pip install vdb`, `import vdb` | `pip install isha-vector-db`, `import isha_vector_db` |
-  | npm | `@vdb/node`, `@vdb/web` | `@isha-vector-db/node`, `@isha-vector-db/web` |
+  | npm | `@vdb/node`, `@vdb/web` | `@isais-logic/isha-vector-db-node`, `@isais-logic/isha-vector-db-web` |
   | Java | `dev.vdb` | `dev.isha.vectordb` |
   | Swift | `import Vdb` | `import IshaVectorDB` |
   | CLI | `vdb stats` | `isha-vector-db stats` |
@@ -115,9 +115,9 @@ thing that changed.
     people a package that fails at `import`. `sdk/python/setup.py` now tags the wheel by platform
     and the library is bundled per target; a wheel built and installed into a clean virtualenv
     was verified to work. CI fails the build if a wheel carrying a library is tagged `any`.
-  - **`@isha-vector-db/node` shipped a single macOS-arm64 addon**, so it would have been broken
+  - **`@isais-logic/isha-vector-db-node` shipped a single macOS-arm64 addon**, so it would have been broken
     on every other platform. It now uses the platform-package pattern esbuild and swc use — one
-    `@isha-vector-db/node-<platform>` package each, declared as optional dependencies with `os`
+    `@isais-logic/isha-vector-db-node-<platform>` package each, declared as optional dependencies with `os`
     and `cpu` set, so npm downloads only the matching one. A missing addon now names the platform
     instead of saying "cannot find module".
 
@@ -367,7 +367,7 @@ thing that changed.
   null check on every pointer. Guarded by a bidirectional header/implementation drift test, an
   ABI behaviour suite, a real C program compiled and run in CI on Linux and macOS, a
   version-bump gate, and a 1.5 MB size budget.
-- **Node SDK** (`@isha-vector-db/node`): an N-API addon plus a thin JavaScript layer, with TypeScript
+- **Node SDK** (`@isais-logic/isha-vector-db-node`): an N-API addon plus a thin JavaScript layer, with TypeScript
   declarations that are the canonical shape every other JavaScript SDK will mirror. Supports
   `using` for scope-based closing. Tested on Node 18 through 22 from one binary, which is the
   claim N-API exists to make.

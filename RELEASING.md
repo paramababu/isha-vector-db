@@ -31,7 +31,7 @@ Registry names are claimed on first publish and are effectively permanent. Check
 and claim them before someone else does:
 
 ```bash
-npm view @isha-vector-db/node          # should 404
+npm view @isais-logic/isha-vector-db-node          # should 404
 pip index versions isha-vector-db      # should find nothing
 cargo search isha-vector-db-core
 ```
@@ -78,17 +78,17 @@ git tag -a v0.1.0 -m "0.1.0" && git push origin v0.1.0
 |---|---|
 | `isha-vector-db-*` (crates.io) | Source. Published in dependency order, because a crate cannot resolve one that is not there yet. |
 | `isha-vector-db` (PyPI) | One wheel per platform, each carrying that platform's shared library, tagged `py3-none-<platform>`. |
-| `@isha-vector-db/node` | JavaScript only. The addon comes from a platform package. |
-| `@isha-vector-db/node-<platform>` | One native addon each, with `os` and `cpu` set so npm downloads only the matching one. |
-| `@isha-vector-db/web` | The WebAssembly module. One artefact for every platform, because wasm has none. |
-| `@isha-vector-db/react-native` | Sources. The native side is built by the consuming app. |
+| `@isais-logic/isha-vector-db-node` | JavaScript only. The addon comes from a platform package. |
+| `@isais-logic/isha-vector-db-node-<platform>` | One native addon each, with `os` and `cpu` set so npm downloads only the matching one. |
+| `@isais-logic/isha-vector-db-web` | The WebAssembly module. One artefact for every platform, because wasm has none. |
+| `@isais-logic/isha-vector-db-react-native` | Sources. The native side is built by the consuming app. |
 
 ## Things that will go wrong the first time
 
 **The npm scope does not exist.** Create it at npmjs.com before the first publish, or every
 package fails with a 404 that reads like a network error.
 
-**`@isha-vector-db/node` is published before its platform packages.** npm resolves optional
+**`@isais-logic/isha-vector-db-node` is published before its platform packages.** npm resolves optional
 dependencies at install time, so the main package must go last. The workflow does this; a manual
 publish is where it gets forgotten.
 
@@ -106,6 +106,6 @@ this and fails the build.
 ## After
 
 - `pip install isha-vector-db` in a clean virtualenv, on a machine that is not the build machine.
-- `npm install @isha-vector-db/node` on Linux, which is the platform most likely to be missing.
+- `npm install @isais-logic/isha-vector-db-node` on Linux, which is the platform most likely to be missing.
 - The GitHub release carries the wheels, the `.wasm`, and `vdb.h`, so a C consumer needs no
   registry at all.

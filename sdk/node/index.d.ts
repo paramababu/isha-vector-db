@@ -1,8 +1,8 @@
 /**
  * An embedded, offline-first vector database.
  *
- * These declarations are the canonical shape of the JavaScript API. `@isha-vector-db/web` and
- * `@isha-vector-db/react-native` mirror them exactly: naming adapts to each platform's conventions, but
+ * These declarations are the canonical shape of the JavaScript API. `@isais-logic/isha-vector-db-web` and
+ * `@isais-logic/isha-vector-db-react-native` mirror them exactly: naming adapts to each platform's conventions, but
  * semantics, argument order, defaults and error classification never do. Semantic divergence
  * between SDKs is the fastest way to make a cross-platform library untrustworthy.
  */

@@ -142,9 +142,9 @@ vdb/
 │   └── isha-vector-db-cli/                   # inspect | verify | compact | migrate | bench | dump
 ├── sdk/
 │   ├── typescript/                # shared types + high-level API, zero native deps
-│   ├── node/                      # npm: @isha-vector-db/node  (+ optional platform packages)
-│   ├── web/                       # npm: @isha-vector-db/web   (wasm + dedicated worker + OPFS)
-│   ├── react-native/              # npm: @isha-vector-db/react-native (JSI/TurboModule)
+│   ├── node/                      # npm: @isais-logic/isha-vector-db-node  (+ optional platform packages)
+│   ├── web/                       # npm: @isais-logic/isha-vector-db-web   (wasm + dedicated worker + OPFS)
+│   ├── react-native/              # npm: @isais-logic/isha-vector-db-react-native (JSI/TurboModule)
 │   ├── flutter/                   # pub: vdb  (ffigen bindings + Dart API)
 │   ├── android/                   # AAR: Kotlin API + JNI shim + prefab
 │   └── ios/                       # SwiftPM + Podspec, XCFramework, Swift API

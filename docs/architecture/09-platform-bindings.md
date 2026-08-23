@@ -57,7 +57,7 @@ with `panic=abort`, `lto=fat`, `codegen-units=1`, `strip=symbols`, and `opt-leve
 ## 9.1 React Native
 
 ```text
-TS API (@isha-vector-db/react-native)   [planned: re-export shared TypeScript types]
+TS API (@isais-logic/isha-vector-db-react-native)   [planned: re-export shared TypeScript types]
    ↓  synchronous calls for cheap ops, Promises for the rest
 JSI HostObject (C++)  ── installed by a TurboModule at startup
    ↓  zero-copy: ArrayBuffer → const float*
@@ -160,7 +160,7 @@ Vdb.xcframework  (device arm64, simulator arm64+x86_64, macOS arm64+x86_64, Cata
 ## 9.5 Node.js
 
 ```text
-TypeScript API (@isha-vector-db/node)   [planned: shared types from sdk/typescript]
+TypeScript API (@isais-logic/isha-vector-db-node)   [planned: shared types from sdk/typescript]
    ↓
 napi-rs addon (N-API, ABI-stable across Node majors)
    ↓
@@ -168,7 +168,7 @@ isha-vector-db-core directly (no C ABI hop — napi-rs binds Rust to Node native
 ```
 
 - **N-API**, so one prebuilt binary works across Node versions without recompiling per release.
-- Prebuilt binaries published as optional dependencies (`@isha-vector-db/node-darwin-arm64`,
+- Prebuilt binaries published as optional dependencies (`@isais-logic/isha-vector-db-node-darwin-arm64`,
   `-linux-x64-gnu`, `-linux-arm64-musl`, `-win32-x64-msvc`, …), with a source build as fallback.
   No `node-gyp` in the happy path.
 - Async operations run on the libuv threadpool via `AsyncTask`, so the event loop never blocks.
@@ -180,7 +180,7 @@ isha-vector-db-core directly (no C ABI hop — napi-rs binds Rust to Node native
 ## 9.6 Web / WASM
 
 ```text
-Main thread:  @isha-vector-db/web  (TS façade, identical API surface to @isha-vector-db/node)
+Main thread:  @isais-logic/isha-vector-db-web  (TS façade, identical API surface to @isais-logic/isha-vector-db-node)
    ↓  Comlink-style RPC over postMessage (structured clone / transferable ArrayBuffers)
 Dedicated Worker:  vdb-wasm (wasm-bindgen)  +  vdb-storage-opfs
    ↓
