@@ -292,6 +292,22 @@ impl Value {
                 // value tag: two bytes; an indexed map adds the table entry on top.
                 let per_entry = if indexed { 2 + INDEX_ENTRY_BYTES } else { 2 };
                 let count = bounded_count(count, r.remaining() / per_entry, count_at)?;
+                // No version of the encoder has ever written a table below the threshold:
+                // v1 had no `MAP_INDEXED` tag at all, and v2 writes one only at
+                // `INDEX_MIN_ENTRIES` or above. Accepting a short table would mean a small map
+                // had two valid encodings, which is the canonical-form rule gone.
+                //
+                // The mirror case — a wide map under the plain tag — is *not* an error: that
+                // is exactly what a v1 file contains, and re-encoding upgrades it. See
+                // ADR-0014; `a_wide_map_under_the_plain_tag_is_v1_and_still_reads` pins it.
+                if indexed && count < INDEX_MIN_ENTRIES {
+                    return Err(FormatError::Malformed {
+                        offset: at,
+                        kind: MalformedKind::Inconsistent {
+                            field: "map index tag",
+                        },
+                    });
+                }
                 // The table is validated rather than trusted: a corrupt offset would make
                 // `find_path` disagree with a full decode, and one of the two would be silently
                 // wrong. Decoding is the slow path that checks; lookup is the fast path that
@@ -792,6 +808,101 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    /// A table below the threshold is an encoding no version of this format has ever
+    /// produced: v1 had no `MAP_INDEXED` tag, and v2 writes one only at `INDEX_MIN_ENTRIES`
+    /// or above. Accepting it would give a small map two byte representations, and every
+    /// checksum, golden fixture and byte-comparing compaction downstream assumes it has one.
+    ///
+    /// Found by the `value` fuzz target on the two-byte input `[9, 0]` — an empty map wearing
+    /// the indexed tag, which decoded happily and re-encoded as `[8, 0]`.
+    #[test]
+    fn a_short_map_may_not_carry_an_offset_table() {
+        let wrong_tag = |bytes: &[u8]| {
+            matches!(
+                Value::decode(bytes),
+                Err(FormatError::Malformed {
+                    kind: MalformedKind::Inconsistent {
+                        field: "map index tag"
+                    },
+                    ..
+                })
+            )
+        };
+
+        // The fuzz crash verbatim.
+        assert!(wrong_tag(&[tag::MAP_INDEXED, 0]));
+
+        // And at every count below the threshold, with a table that is otherwise well formed —
+        // so what is rejected is the tag, not some incidental damage to the offsets.
+        for count in 1..INDEX_MIN_ENTRIES {
+            let mut map = BTreeMap::new();
+            for i in 0..count {
+                map.insert(format!("k{i}"), Value::I64(i as i64));
+            }
+            let mut bytes = Value::Map(map).encode().unwrap();
+            assert_eq!(bytes[0], tag::MAP);
+            let entries = &bytes[2..];
+            let mut table = Vec::new();
+            let mut r = Reader::new(entries);
+            for _ in 0..count {
+                table.extend_from_slice(&(r.offset() as u16).to_le_bytes());
+                r.blob().unwrap();
+                skip_value(&mut r).unwrap();
+            }
+            bytes[0] = tag::MAP_INDEXED;
+            bytes.splice(2..2, table);
+            assert!(wrong_tag(&bytes), "count {count} was accepted as indexed");
+        }
+    }
+
+    /// The mirror case is deliberately *not* an error. A v1 file writes a map of any width
+    /// under the plain tag, and a v2 build has to open it (ADR-0014, and `testdata/v1/` is the
+    /// fixture that proves it). Re-encoding upgrades the record to the indexed form, so this
+    /// is the one input where decode and encode are not exact inverses — which is why the
+    /// `value` fuzz target states its canonicality property with this exception spelled out.
+    #[test]
+    fn a_wide_map_under_the_plain_tag_is_v1_and_still_reads() {
+        let mut map = BTreeMap::new();
+        for i in 0..INDEX_MIN_ENTRIES + 4 {
+            map.insert(format!("k{i:02}"), Value::I64(i as i64));
+        }
+        let value = Value::Map(map.clone());
+
+        let indexed = value.encode().unwrap();
+        assert_eq!(indexed[0], tag::MAP_INDEXED);
+        // Strip the table back off to get the bytes v1 would have written.
+        let count = map.len();
+        let mut plain = vec![tag::MAP, count as u8];
+        plain.extend_from_slice(&indexed[2 + count * INDEX_ENTRY_BYTES..]);
+
+        assert_eq!(
+            Value::decode(&plain).unwrap(),
+            value,
+            "v1 bytes must decode"
+        );
+        assert_eq!(
+            Value::decode(&plain).unwrap().encode().unwrap(),
+            indexed,
+            "re-encoding a v1 record must upgrade it, not reproduce it"
+        );
+        // The lazy path has to agree with the eager one on those same bytes.
+        for key in map.keys() {
+            assert_eq!(find_path(&plain, key).unwrap().as_ref(), map.get(key));
+        }
+
+        // A map whose entries outrun a `u16` offset is written plain by the *current* encoder
+        // too, and there the plain tag is canonical rather than historical.
+        let mut big = BTreeMap::new();
+        for i in 0..INDEX_MIN_ENTRIES {
+            big.insert(format!("k{i}"), Value::Str("x".repeat(10_000)));
+        }
+        let value = Value::Map(big);
+        let bytes = value.encode().unwrap();
+        assert_eq!(bytes[0], tag::MAP);
+        assert_eq!(Value::decode(&bytes).unwrap(), value);
+        assert_eq!(Value::decode(&bytes).unwrap().encode().unwrap(), bytes);
     }
 
     #[test]

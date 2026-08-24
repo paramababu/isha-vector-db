@@ -11,6 +11,11 @@ targets assert the properties that matter for a database people trust with their
    sequences mean the same thing, and checksums, golden fixtures and compaction verification all
    become unreliable.
 
+   One exception, and it is deliberate: a v1 file writes a map of eight or more fields under the
+   plain tag, and a v2 build must still read it ([ADR-0014](../../../docs/adr/0014-metadata-offset-table.md)).
+   Re-encoding upgrades such a record to the indexed form, so its bytes get strictly longer.
+   `value` allows exactly that divergence and nothing else.
+
 ## Running
 
 ```bash

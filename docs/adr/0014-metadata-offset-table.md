@@ -27,6 +27,12 @@ logical value still has exactly one byte representation.
 Offsets are `u16` to keep the table at two bytes a field. A map whose entries exceed 64 KiB is
 written plain; the reader accepts both tags, so correctness never depends on the size.
 
+The tolerance runs one way only. A wide map under the plain tag is what a v1 file contains, so
+the reader takes it and re-encoding upgrades it. A map *below* the threshold carrying a table is
+an encoding no version has ever written, and the reader rejects it — accepting it would give a
+small map two spellings, which is the canonical-form rule gone. That asymmetry was found the
+hard way: see the `[9, 0]` entry in the changelog.
+
 ## Consequences
 
 Measured on 5,000 documents at 128 dimensions, comparing the two encodings of the same corpus.

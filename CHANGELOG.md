@@ -9,6 +9,32 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
 
 ## [Unreleased]
 
+### Fixed
+
+- **A metadata map of fewer than eight fields could be written two different ways, and both
+  decoded.** The v2 encoder attaches a field offset table at eight entries or more
+  ([ADR-0014](docs/adr/0014-metadata-offset-table.md)) and writes the `MAP_INDEXED` tag to say
+  so; the decoder accepted that tag at *any* entry count. Two bytes — `[9, 0]`, an empty map
+  claiming a table — decoded to `{}` and re-encoded as `[8, 0]`.
+
+  That is a canonicality break, which for this format is not cosmetic: metadata checksums are
+  taken over the encoded bytes, golden fixtures are compared byte for byte, and compaction is
+  verified by comparing bytes rather than by re-parsing. Two spellings of one map make all
+  three unreliable. Decoding a table below the threshold is now
+  `Malformed { kind: Inconsistent { field: "map index tag" } }` — no version of the encoder has
+  ever produced one, so nothing on disk anywhere can contain it.
+
+  The mirror case is left accepted on purpose: a v1 file writes a wide map under the plain tag,
+  a v2 build has to open it, and re-encoding upgrades it. The first attempt at this fix rejected
+  that too, and `a_database_written_by_v1_still_opens` failed on the committed `testdata/v1/`
+  fixture — which is what that fixture is for. The `value` fuzz target now states its
+  canonicality property with that one exception spelled out, rather than asserting a stricter
+  rule than the format actually promises.
+
+  Found by the nightly fuzz run. The crash input is committed to `fuzz/corpus/value/`, and both
+  directions of the tag rule are pinned by unit tests. Storage format: unchanged at v2; these
+  are bytes that were never valid.
+
 ## [0.1.0] — 2026-08-23
 
 First release. Everything below was built and tested before it; the version number is the only

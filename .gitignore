@@ -28,5 +28,10 @@ sdk/python/isha_vector_db/*.so
 sdk/python/isha_vector_db/*.dylib
 sdk/python/isha_vector_db/*.dll
 
+# Fuzzing build output, and crashes as the fuzzer drops them. A crash only belongs in the
+# repository once it has been promoted to a regression case under fuzz/corpus/.
+crates/*/fuzz/target/
+crates/*/fuzz/artifacts/
+
 # Node platform packages are filled in by the release workflow.
 sdk/node/npm/*/vdb.node

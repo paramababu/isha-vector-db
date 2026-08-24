@@ -11,6 +11,9 @@
 
 # Byte-exact fixtures. `binary` means "never convert, never diff as text".
 testdata/** binary
+# Fuzz corpus entries are raw bytes that must reach the decoder unaltered — a converted
+# newline inside one is a regression case that silently stops reproducing its crash.
+crates/*/fuzz/corpus/** binary
 *.wasm binary
 *.node binary
 *.a binary
