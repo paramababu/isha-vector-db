@@ -14,17 +14,18 @@ things that go wrong on that platform specifically.
 | [Android](docs/getting-started/android.md) | [iOS](docs/getting-started/ios.md) | [Rust](docs/getting-started/rust.md) | [C / C++](docs/getting-started/c.md) |
 
 ```bash
-pip install vdb                 # Python
-npm install @isais-logic/isha-vector-db-node           # Node.js
-npm install @isais-logic/isha-vector-db-web            # browsers
+npm install @isais-logic/isha-vector-db-node   # Node.js
+npm install @isais-logic/isha-vector-db-web    # browsers
+pip install isha-vector-db                     # Python — not on PyPI yet, see the guide
 ```
 
 Think SQLite, not Milvus: a library your application links against to keep vectors and metadata
 on local disk and search them. No server, no network, no daemon.
 
-> **Status: Phase 0 → Phase 1.** The architecture is settled and the core is under construction.
-> Nothing here is released yet, the API will change, and the on-disk format is not frozen.
-> Do not put data you care about in it.
+> **Status: 0.1.0, the first release.** The Node, web and React Native SDKs are on npm. Nothing
+> is on PyPI or crates.io yet; [RELEASING.md](RELEASING.md) tracks what is published where. The
+> API will still change, and the on-disk format is at v2 — a v2 build reads v1 files, but
+> neither is frozen. The C ABI is. Do not put data you care about in it.
 
 ## Why this exists
 
@@ -92,10 +93,7 @@ Nothing at or below the public API knows which platform it is on. That is enforc
 | Web / WASM — WebAssembly module, OPFS storage verified in a browser | Done |
 | Python — ctypes over the C ABI, 19 tests | Done |
 | React Native — JSI bridge, 56 C++ checks + 11 JS tests | Built (JSI glue and packaging unverified) |
-| Flutter | Next |
-| `isha-vector-db-index-flat`, search, filters | Not started |
-| `isha-vector-db-storage-os` | Not started |
-| C ABI, SDKs, HNSW, web | Later phases |
+| Flutter | Not started |
 
 Roadmap and ordering: [docs/architecture/11-roadmap-risks-order.md](docs/architecture/11-roadmap-risks-order.md).
 

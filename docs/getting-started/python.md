@@ -9,10 +9,11 @@ pip install isha-vector-db
 Python 3.9 or newer. No Python dependencies at all — the binding is `ctypes` over the engine's C
 ABI, so there is nothing to compile at install time and no build toolchain required.
 
-> **Not yet on PyPI, and the wheel does not bundle the engine.** The published package would need
-> a per-platform wheel build (the shared library differs on Linux, macOS and Windows), and that
-> pipeline does not exist yet — the current wheel is `py3-none-any` and contains only the Python
-> files. Until then, build the library and point at it:
+> **Not yet on PyPI.** The per-platform wheel build exists — `release.yml` builds one wheel per
+> platform, each carrying that platform's shared library, and they are attached to the 0.1.0
+> GitHub release — but PyPI trusted publishing is not configured, so nothing has been uploaded.
+> A wheel built locally without that step is `py3-none-any` and contains only the Python files.
+> Until the upload happens, take the wheel from the release, or build the library and point at it:
 >
 > ```bash
 > cargo build -p isha-vector-db-ffi --release
