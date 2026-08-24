@@ -31,7 +31,7 @@ Registry names are claimed on first publish and are effectively permanent. Check
 and claim them before someone else does:
 
 ```bash
-npm view @isais-logic/isha-vector-db-node          # should 404
+npm view @isais-logic/isha-vector-db-node          # 0.1.0 since 2026-08-24; a new version must not exist
 pip index versions isha-vector-db      # should find nothing
 cargo search isha-vector-db-core
 ```
@@ -85,7 +85,8 @@ git tag -a v0.1.0 -m "0.1.0" && git push origin v0.1.0
 
 ## Things that will go wrong the first time
 
-**The npm scope does not exist.** Create it at npmjs.com before the first publish, or every
+**The npm scope does not exist.** `@isais-logic` was created for 0.1.0, so this applies only to a
+new scope: create it at npmjs.com before the first publish, or every
 package fails with a 404 that reads like a network error.
 
 **`@isais-logic/isha-vector-db-node` is published before its platform packages.** npm resolves optional
