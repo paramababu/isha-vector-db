@@ -199,16 +199,33 @@ jobs:
     needs: [node-addons, web]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    # Trusted publishing, for the same reason publish-pypi uses it: no long-lived token in the
+    # repository's secrets. npm mints a short-lived credential from this job's OIDC identity,
+    # which cannot be extracted or replayed somewhere else.
+    #
+    # This is not merely the nicer option any more. A granular access token needs an interactive
+    # 2FA challenge to publish -- which is what stopped the 0.1.0 release, and had to be finished
+    # by hand with an OTP -- and npm is removing direct publishing from 2FA-bypass tokens in
+    # January 2027. See https://gh.io/npm-gat-bypass2fa-deprecation.
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: "22", registry-url: "https://registry.npmjs.org" }
+      # Trusted publishing needs npm 11.5.1 or later, which is newer than the npm any current
+      # Node ships with. Pinned rather than left to whatever the runner image happens to carry:
+      # a silent downgrade here would fail the release at the last step, after every artefact
+      # has been built.
+      - run: npm install -g npm@^11.5.1
+      - run: npm --version
       - uses: actions/download-artifact@v4
         with: { path: /tmp/artifacts }
 
+      # No NODE_AUTH_TOKEN: the OIDC exchange above is the credential. --provenance attaches a
+      # signed statement of which workflow, commit and runner produced each tarball.
       - name: Publish the platform packages, then the ones that depend on them
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           for dir in sdk/node/npm/*/; do
             name=$(basename "$dir")
@@ -218,15 +235,15 @@ jobs:
               continue
             fi
             cp "$src" "$dir/vdb.node"
-            (cd "$dir" && npm publish --access public)
+            (cd "$dir" && npm publish --access public --provenance)
           done
 
           cp /tmp/artifacts/wasm/vdb.wasm sdk/web/vdb.wasm
-          (cd sdk/web && npm publish --access public)
-          (cd sdk/react-native && npm publish --access public)
+          (cd sdk/web && npm publish --access public --provenance)
+          (cd sdk/react-native && npm publish --access public --provenance)
           # Last: it declares the platform packages as optional dependencies, and npm resolves
           # them at install time, so they must already exist.
-          (cd sdk/node && npm publish --access public)
+          (cd sdk/node && npm publish --access public --provenance)
 
   github-release:
     needs: [python-wheels, node-addons, web]

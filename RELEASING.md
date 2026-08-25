@@ -6,13 +6,15 @@ whatever that laptop happened to have.
 
 ## Before the first release: accounts and secrets
 
-None of this can be done from a repository. Each needs an account you own, and the token from it
-in **Settings → Secrets and variables → Actions**.
+None of this can be done from a repository. Each needs an account you own — and where a token is
+still involved, that token in **Settings → Secrets and variables → Actions**. Two of the three
+now use trusted publishing instead, which is a configuration step on the registry rather than a
+secret here.
 
 | Registry | Secret | How to get it |
 |---|---|---|
 | crates.io | `CARGO_REGISTRY_TOKEN` | `cargo login` → [crates.io/settings/tokens](https://crates.io/settings/tokens), scoped to publish-new and publish-update |
-| npm | `NPM_TOKEN` | An **automation** token — a normal one fails under 2FA in CI |
+| npm | *(none)* | Configure [trusted publishing](https://docs.npmjs.com/trusted-publishers) instead, **per package** — all six: owner `paramababu`, repo `isha-vector-db`, workflow `release.yml`. A token is no longer a working option: a granular token needs an interactive 2FA challenge, which is what stopped the 0.1.0 release, and npm removes direct publishing from 2FA-bypass tokens in January 2027. |
 | PyPI | *(none)* | Configure [trusted publishing](https://docs.pypi.org/trusted-publishers/) instead: owner `paramababu`, repo `isha-vector-db`, workflow `release.yml`. No long-lived token in the repository. |
 
 Two more registries need work that does not exist yet:
