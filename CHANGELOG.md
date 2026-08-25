@@ -11,6 +11,25 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
 
 ### Fixed
 
+- **`@isais-logic/isha-vector-db-node` promised a platform it did not ship.** The package
+  declares `linux-arm64` among its optional dependencies, but the release matrix never built
+  it, so `@isais-logic/isha-vector-db-node-linux-arm64` does not exist on npm. The install
+  still succeeds — npm tolerates a missing optional dependency — but every user sees it in
+  their tree, and Linux ARM users get a package that fails at `require` time:
+
+  ```
+  └─┬ @isais-logic/isha-vector-db-node@0.1.0
+    ├── @isais-logic/isha-vector-db-node-linux-arm64@ invalid: "0.1.0"
+  ```
+
+  Now built, on a native `ubuntu-24.04-arm` runner rather than cross-compiled: the addon is a
+  `cdylib`, so it needs a real linker, and cross-compiling it would mean carrying an aarch64
+  toolchain to gain nothing. `aarch64-unknown-linux-gnu` also joins the cross-build check, so a
+  target that stops compiling is caught on a pull request instead of at release time.
+
+  Known and deliberately shipped in 0.1.0 — the alternative was holding the first release over
+  it. This is the half of that decision that was deferred, not a regression.
+
 - **A metadata map of fewer than eight fields could be written two different ways, and both
   decoded.** The v2 encoder attaches a field offset table at eight entries or more
   ([ADR-0014](docs/adr/0014-metadata-offset-table.md)) and writes the `MAP_INDEXED` tag to say
