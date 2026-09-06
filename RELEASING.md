@@ -81,8 +81,11 @@ cargo test --workspace && ./scripts/check-core-purity.sh && ./scripts/check-refe
 #    step 2 produces a module that says the old version and fails the staleness check.
 ./scripts/build-web.sh && git add sdk/web/vdb.wasm
 
-# 5. Dry run: builds every artefact, publishes nothing.
-gh workflow run release.yml -f dry_run=true
+# 5. Dry run: builds every artefact, publishes nothing. No flag — a manual run is ALWAYS a dry
+#    run, because every publish job is gated on `github.event_name == 'push'`. Passing
+#    `-f dry_run=true` fails: the workflow deliberately defines no such input, so that no
+#    boolean exists for someone to flip and burn a version number with.
+gh workflow run release.yml
 
 # 6. When that is green:
 git tag -a v0.2.0 -m "0.2.0" && git push origin v0.2.0
@@ -115,7 +118,8 @@ publish is where it gets forgotten.
 
 **A version is already taken.** PyPI and npm both refuse a re-upload of the same version, even
 after a delete. A failed release burns that number — go to the next patch rather than trying to
-reuse it. This is why the manual trigger defaults to a dry run.
+reuse it. This is why a manual trigger cannot publish at all: not a default that can be
+overridden, but the absence of any input that would let it.
 
 **A platform's runner never starts.** The publish jobs wait on the whole build matrix, so one
 unavailable runner blocks the entire release rather than just its own platform. `macos-13`
