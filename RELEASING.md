@@ -62,17 +62,35 @@ cargo test --workspace && ./scripts/check-core-purity.sh && ./scripts/check-refe
 ./scripts/test-python.sh && ./scripts/test-react-native.sh
 (cd sdk/node && npm test) && (cd sdk/web && npm test)
 
-# 2. Set the version everywhere it appears.
-#    Root Cargo.toml, sdk/*/package.json, sdk/node/npm/*/package.json, sdk/python/pyproject.toml.
+# 2. Set the version everywhere it appears. Six places, and the last two are the ones that get
+#    forgotten because they are pins rather than declarations:
+#      Root Cargo.toml, sdk/*/package.json, sdk/node/npm/*/package.json, sdk/python/pyproject.toml
+#      [workspace.dependencies] in Cargo.toml  — path + version; cargo publish uses the version
+#        half, so 0.2.0 crates asking for ^0.1.0 of each other fail to resolve on crates.io
+#      optionalDependencies in sdk/node/package.json — exact pins npm resolves at install time,
+#        so a stale one sends every install after platform packages that were never published
+#    Then `cargo update --workspace` to bring Cargo.lock along.
+#
+#    grep -rn '<old version>' Cargo.toml sdk/*/package.json sdk/node/npm/*/package.json \
+#      sdk/python/pyproject.toml    # should come back empty
 
 # 3. Write the changelog entry. Move [Unreleased] to the new version with a date.
 
-# 4. Dry run: builds every artefact, publishes nothing.
+# 4. Rebuild the WebAssembly module, AFTER the bump. It embeds the crate version and reports it
+#    through vdb_version(), and ci-web.yml compares that against Cargo.toml. Rebuilding before
+#    step 2 produces a module that says the old version and fails the staleness check.
+./scripts/build-web.sh && git add sdk/web/vdb.wasm
+
+# 5. Dry run: builds every artefact, publishes nothing.
 gh workflow run release.yml -f dry_run=true
 
-# 5. When that is green:
-git tag -a v0.1.0 -m "0.1.0" && git push origin v0.1.0
+# 6. When that is green:
+git tag -a v0.2.0 -m "0.2.0" && git push origin v0.2.0
 ```
+
+Step 4 has caught out both releases so far, because the ordering is the opposite of what feels
+natural — the module is a build artefact, so the instinct is to rebuild it first and then set
+versions. `sdk/web/vdb.wasm` is the only committed binary that carries the version inside it.
 
 ## What a release actually publishes
 
