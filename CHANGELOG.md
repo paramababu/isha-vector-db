@@ -7,7 +7,14 @@ All notable changes to this project are documented here. The format follows
 Four things are versioned independently: the **library** (SemVer), the **storage format** (an
 integer), the **ABI** (an integer), and the **SDK packages**. Entries state which changed.
 
-## [Unreleased]
+## [0.2.0] — 2026-09-06
+
+A React Native release. The package published as 0.1.0 could not be installed by anybody; this
+one can be, and the checks that would have caught that are now in CI. The SDK also gains the
+API it was documented as already having.
+
+**The C ABI is now revision 2** — one added function, `vdb_metadata_set_null`. Additive, so an
+existing caller is unaffected; see below for what that does and does not mean.
 
 ### Fixed
 
