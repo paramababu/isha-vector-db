@@ -1,22 +1,43 @@
 {
   "name": "@isais-logic/isha-vector-db-react-native",
   "version": "0.1.0",
-  "description": "vdb for React Native: the embedded vector database, over JSI.",
+  "description": "isha-vector-db for React Native: the embedded vector database, over JSI.",
   "type": "module",
-  "main": "src/index.js",
+  "main": "src/native.js",
+  "types": "index.d.ts",
   "files": [
     "src",
-    "cpp",
+    "cpp/vdb_bridge.h",
+    "cpp/vdb_bridge.cpp",
+    "cpp/vdb_jsi.cpp",
+    "include",
     "ios",
     "android",
+    "index.d.ts",
     "isha-vector-db.podspec",
+    "react-native.config.js",
     "README.md"
   ],
   "scripts": {
-    "test": "node --test test/api.test.js"
+    "prepack": "node scripts/prepack.js",
+    "test": "node --test test/api.test.js test/filter.test.js"
   },
   "peerDependencies": {
     "react-native": ">=0.73.0"
   },
-  "license": "Apache-2.0"
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/paramababu/isha-vector-db.git",
+    "directory": "sdk/react-native"
+  },
+  "keywords": [
+    "vector-database",
+    "embeddings",
+    "similarity-search",
+    "react-native",
+    "jsi",
+    "offline",
+    "on-device"
+  ]
 }

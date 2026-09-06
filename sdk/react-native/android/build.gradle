@@ -1,0 +1,99 @@
+// The Gradle module React Native's autolinking looks for.
+//
+// Its absence is why version 0.1.0 could not be installed at all: autolinking scans a package for
+// `android/build.gradle`, and finding none, silently contributes nothing — so the JSI bindings
+// were never installed and `globalThis.__vdb` was never defined, whatever the app did.
+//
+// NOT VERIFIED BY CI. There is no Android project in this repository to build it against, and no
+// NDK on the machine that wrote it. `scripts/check-react-native-package.sh` checks that every
+// file this references is actually in the published tarball — which is the defect that shipped —
+// but not that Gradle is happy with it. Expect to correct something on first use, and please
+// report what.
+
+buildscript {
+  repositories {
+    google()
+    mavenCentral()
+  }
+  dependencies {
+    classpath 'com.android.tools.build:gradle:8.1.1'
+  }
+}
+
+apply plugin: 'com.android.library'
+
+// The app's versions win where it sets them: a library that pins its own compileSdk against an
+// app on a different one is a merge conflict at build time, not a safety feature.
+def resolve(name, fallback) {
+  rootProject.hasProperty(name) ? rootProject.property(name).toString().toInteger() : fallback
+}
+
+android {
+  namespace 'dev.isha.vectordb.reactnative'
+  compileSdk resolve('compileSdkVersion', 34)
+
+  defaultConfig {
+    minSdk resolve('minSdkVersion', 24)
+
+    externalNativeBuild {
+      cmake {
+        // The JSI headers come from the app's React Native, whose path CMakeLists.txt is told.
+        arguments '-DANDROID_STL=c++_shared',
+                  "-DREACT_NATIVE_DIR=${findReactNativeDir()}"
+        cppFlags '-std=c++17', '-fexceptions', '-frtti'
+      }
+    }
+
+    // Only the ABIs the Rust static library is built for. An ABI listed here without a matching
+    // libisha_vector_db_ffi.a fails at link time with a message about a missing file, which is a
+    // better outcome than a runtime UnsatisfiedLinkError on a device nobody tested.
+    ndk {
+      abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64'
+    }
+  }
+
+  externalNativeBuild {
+    cmake {
+      path 'CMakeLists.txt'
+    }
+  }
+
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_17
+    targetCompatibility JavaVersion.VERSION_17
+  }
+
+  packagingOptions {
+    // The app, and every other native library in it, brings its own copy of these. Excluding
+    // them here rather than letting the app discover a duplicate-file error is the convention
+    // every React Native native module follows.
+    excludes += ['**/libc++_shared.so', '**/libjsi.so', '**/libreactnative.so']
+  }
+}
+
+/// Where the app's React Native lives, for the JSI headers.
+///
+/// Resolved through Node rather than assumed to be `node_modules/react-native`, because in a
+/// monorepo it very often is not.
+def findReactNativeDir() {
+  def override = rootProject.hasProperty('reactNativeDir') ? rootProject.property('reactNativeDir') : null
+  if (override != null) {
+    return override
+  }
+  return new File(
+    providers.exec {
+      commandLine 'node', '-e', "console.log(require.resolve('react-native/package.json'))"
+    }.standardOutput.asText.get().trim()
+  ).parent
+}
+
+repositories {
+  google()
+  mavenCentral()
+}
+
+dependencies {
+  // The app's React Native, not a version of our choosing. Pinning one here would override the
+  // app's and is the standard way a native module breaks an upgrade.
+  implementation 'com.facebook.react:react-android'
+}

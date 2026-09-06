@@ -864,6 +864,30 @@ pub unsafe extern "C" fn vdb_metadata_set_f64(
     })
 }
 
+/// Set a field to null.
+///
+/// Explicitly null, not absent. The distinction is invisible to every comparison — an absent
+/// field already equals null — but `VDB_UNARY_EXISTS` can tell them apart, so a binding that
+/// dropped null-valued keys instead of calling this would quietly change what `$exists` reports.
+///
+/// # Safety
+/// `metadata` must be live and `key` readable.
+#[no_mangle]
+pub unsafe extern "C" fn vdb_metadata_set_null(
+    metadata: *mut VdbMetadata,
+    key: *const u8,
+    key_len: usize,
+    err: *mut *mut VdbError,
+) -> i32 {
+    guard(err, || {
+        // SAFETY: the caller guarantees the handle is live and `key` is readable.
+        let m = unsafe { VdbMetadata::borrow_mut(metadata) }?;
+        let key = unsafe { borrow_str(key, key_len) }?.to_owned();
+        m.insert(key, Value::Null);
+        Ok(())
+    })
+}
+
 /// Set a boolean field.
 ///
 /// # Safety

@@ -7,7 +7,7 @@
 | **0** | — | Architecture (this document set), ADRs, repo skeleton, CI skeleton | Reviewed and agreed; skeleton CI green |
 | **1** | 0.1 | Core engine: CRUD, batch, flat index, 3 metrics, filters, WAL+manifest+segments, recovery, memory+os storage, CLI, full test suite, benchmarks | All §8.2 cases pass; fault-injection sweep clean; benchmark baseline committed |
 | **1.5** | 0.2 | C ABI frozen; `vdb.h` v1; compaction; `verify`/`repair`; Node SDK | ABI conformance tests pass; Node SDK e2e green on 4 platforms |
-| **2** | 0.3 | React Native, Flutter, Android, iOS SDKs; parity tests; per-platform examples and docs | Every SDK passes the shared parity suite on a real device |
+| **2** | 0.3 | React Native, Flutter, Android, iOS SDKs; parity tests; per-platform examples and docs | Every SDK passes the shared parity suite on a real device — **not met**; see §11.4 |
 | **3** | 0.4 | HNSW **done** ([ADR-0015](../adr/0015-hnsw-index.md)); index selection guidance; recall gates **done**; on-disk id table for large collections | Recall@10 ≥ 0.95 at documented params — **met** (0.974 at 50k x 384, 0.992 at 10k x 128, ef 64); build time benchmarked — **met** (95s at 50k x 384) |
 | **4** | 0.5 | Web/WASM SDK (OPFS + IndexedDB fallback); encryption codec; scalar quantization | Web e2e in 3 browsers; encryption round-trip + key-rotation tests |
 | **5** | 1.0 | API freeze; stability commitment; format frozen with a migration path proven by an actual v1→v2 migration — **done**, see [ADR-0014](../adr/0014-metadata-offset-table.md) | Three consecutive releases with no breaking changes; production users |
@@ -22,7 +22,7 @@
 | R3 | **Corrupt-file parser turns into a crash or OOM** | Crashes in the host app; a security issue | `forbid(unsafe_code)` in the format crate; every length checked against remaining file size; continuous fuzzing; a committed corrupt-file corpus. |
 | R4 | **Mobile memory pressure kills the host app during a scan** | App-store-visible instability | Chunked scans with a bounded working buffer; `madvise` after chunks on Darwin; measure RSS in benchmarks; quantization on the roadmap as the structural fix. |
 | R5 | **WASM memory ceiling** caps browser datasets at ~1–2 M vectors | Web positioning | Stream from OPFS rather than loading into WASM memory; document the ceiling numerically; recommend server-side search above it. |
-| R6 | **React Native churn** (JSI/TurboModule APIs move between RN versions) | Recurrent breakage | Keep the C++ shim thin and mechanical; test the two most recent RN minors in CI; publish a support matrix; evaluate Nitro Modules to move the churn into someone else's codegen. |
+| R6 | **React Native churn** (JSI/TurboModule APIs move between RN versions) | Recurrent breakage | Keep the C++ shim thin and mechanical — **done**, all logic is in `vdb_bridge.cpp`, which runs on a development machine. Compile `vdb_jsi.cpp` against both ends of the supported range on every push — **done** (0.73 and the current release, `scripts/test-react-native.sh`); testing the bracket rather than two adjacent minors is what catches the oldest supported version quietly breaking. Publish a support matrix; evaluate Nitro Modules to move the churn into someone else's codegen. |
 | R7 | **Float non-determinism across architectures** reorders near-ties | Confusing, hard-to-diagnose user reports | Decided up front (§6.3): id tie-breaks, epsilon comparison, an opt-in deterministic-kernel feature, and it is documented. |
 | R8 | **Premature ANN work destabilizes the core** | Correctness debt that is expensive to unwind | Rule 3: HNSW does not start until Phase 3, gated on a benchmarked, frozen core. Flat is the permanent ground truth. |
 | R9 | **API churn after bindings exist** — every core change becomes six changes | Velocity collapse | Freeze the C ABI at 0.2, before any mobile SDK. Additive-only after that; `vdb_abi_version` guards mismatches. |
@@ -101,3 +101,58 @@ completeness pass. 38. Stability commitment. **1.0.**
 - **Node before mobile.** It is tempting to start with the platform the product needs most. But the
   first binding is where all the ABI design mistakes surface, and finding them in a five-second
   `npm test` loop rather than a five-minute Gradle/Xcode loop is worth several weeks.
+
+## 11.4 Phase 2.1 — finishing the SDKs that exist
+
+Phase 2's exit criterion is "every SDK passes the shared parity suite on a real device". Neither
+half of that is true: there is no shared parity suite, and no SDK has been run on a device. The
+React Native package made this concrete — it was published to npm in a state where it could not
+be installed by anybody, and nothing in CI noticed, because everything in CI tested the parts of
+it that could run on a build machine and nothing tested what was in the tarball.
+
+The lesson generalises past React Native, and it is the ordering principle for this phase:
+**a check that can run without a device is worth more than a plan to test on one**, and the
+checks worth adding first are the ones that would have caught what actually shipped.
+
+### Done
+
+| # | Work | What it proves |
+|---|---|---|
+| 39 | React Native API brought to parity with the canonical JavaScript shape: metadata, filters, batches, stats, compaction, verification, `openCollection`, `dropCollection`, durability, typed declarations | The promise in `sdk/node/index.d.ts` — that the web and React Native SDKs "mirror them exactly" — is true rather than aspirational |
+| 40 | Filter and metadata compilers written in JavaScript rather than C++, with 45 tests | The postfix flattening a C-ABI binding cannot avoid is testable without a device; an unbalanced filter is refused before it reaches the engine |
+| 41 | `vdb_jsi.cpp` compiled against React Native's own JSI headers at both ends of the supported range | The file that was previously "not covered by CI at all" now breaks the build when a signature moves ([R6](#112-major-technical-risks-and-mitigations)) |
+| 42 | `scripts/check-react-native-package.sh` — the tarball contains every file its own build files name, and the engine for every architecture it claims | The 0.1.0 failure, mechanically, with no mobile toolchain. Gates the release |
+| 43 | `vdb_metadata_set_null` added to the C ABI | The one metadata type Node and Java could express and the two C-ABI SDKs could not. Additive, so the ABI stays frozen at 1 |
+| 44 | Debug information stripped from the shipped archives | 158 MB unpacked to 103 MB, on a package every React Native developer downloads in full ([R10](#112-major-technical-risks-and-mitigations)) |
+
+### Next, in order
+
+45. **A shared parity suite.** One list of cases — the same collection, the same vectors, the same
+    filters, the same expected hits — that every SDK runs. Today each SDK has its own tests and
+    they check different things, so "the SDKs agree" is an assertion nobody can execute. This
+    comes first because it is what every item below is measured against, and because writing it
+    will find divergences that exist right now.
+
+46. **One real app, per platform, in CI.** The remaining gap for React Native is not a missing
+    check, it is that nobody has built it: a minimal app that installs the package, builds with
+    Gradle and with Xcode, and runs the parity suite on an emulator and a simulator. Until this
+    exists, "the packaging is unverified" stays in every README, and it should.
+
+47. **Off-thread calls.** §9.1 specifies a dedicated C++ thread with a serial queue delivering
+    results through the `CallInvoker`. The React Native binding is synchronous throughout, so a
+    40 ms search is three dropped frames. This is the largest remaining correctness-adjacent gap
+    in the SDK and the one users will notice first. It needs 46 to be testable.
+
+48. **Flutter.** The one Phase 2 SDK that does not exist. Deliberately last: it needs `ffigen`
+    over the same C ABI the other bindings use, and every ergonomic mistake found in 39–44 is one
+    it now avoids rather than repeats.
+
+49. **A published support matrix.** Which React Native, Android API, iOS and Node versions are
+    tested, in a table generated from the CI matrix rather than written by hand — a hand-written
+    one is a claim, and the point of this phase is to stop making those.
+
+### Exit criteria
+
+Phase 2 closes when the parity suite passes on a real device or emulator for every SDK the
+repository ships, in CI, on every push — and when no README has to warn that a package has never
+been built into an application.

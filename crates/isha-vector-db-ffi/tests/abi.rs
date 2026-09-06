@@ -692,6 +692,69 @@ fn filters_compose_to_arbitrary_depth() {
     unsafe { vdb_close(db, &mut err) };
 }
 
+/// An explicitly null field is present; an absent one is not.
+///
+/// The two are indistinguishable to every comparison — an absent field already equals null — so
+/// `EXISTS` is the only thing that can tell them apart, and it is what makes
+/// `vdb_metadata_set_null` worth having rather than letting bindings drop null-valued keys.
+#[test]
+fn an_explicitly_null_field_exists_where_an_absent_one_does_not() {
+    let dir = TempDir::new("metadata-null");
+    let db = open(&dir);
+    let c = collection(db, 2);
+    let mut err = ptr::null_mut();
+
+    // "noted" carries note = null; "silent" carries no note at all.
+    let m = vdb_metadata_new();
+    assert_eq!(
+        unsafe { vdb_metadata_set_null(m, b"note".as_ptr(), 4, &mut err) },
+        VDB_OK,
+        "{}",
+        message(err)
+    );
+    let v = [1.0f32, 0.0];
+    let rc = unsafe {
+        vdb_upsert(
+            c,
+            b"noted".as_ptr(),
+            5,
+            v.as_ptr(),
+            2,
+            m,
+            ptr::null_mut(),
+            &mut err,
+        )
+    };
+    assert_eq!(rc, VDB_OK, "{}", message(err));
+    unsafe { vdb_metadata_free(m) };
+
+    let rc = unsafe {
+        vdb_upsert(
+            c,
+            b"silent".as_ptr(),
+            6,
+            v.as_ptr(),
+            2,
+            ptr::null(),
+            ptr::null_mut(),
+            &mut err,
+        )
+    };
+    assert_eq!(rc, VDB_OK, "{}", message(err));
+
+    let f = vdb_filter_new();
+    unsafe { vdb_filter_unary(f, b"note".as_ptr(), 4, UNARY_EXISTS, &mut err) };
+    assert_eq!(
+        filtered_ids(c, f),
+        vec!["noted"],
+        "an explicit null is present; an absent field is not"
+    );
+    unsafe { vdb_filter_free(f) };
+
+    unsafe { vdb_collection_free(c) };
+    unsafe { vdb_close(db, &mut err) };
+}
+
 /// An unbalanced builder must be refused. A filter missing a clause returns documents the
 /// caller asked to exclude, and does so without saying anything.
 #[test]
