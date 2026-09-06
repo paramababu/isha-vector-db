@@ -22,10 +22,13 @@ pip install isha-vector-db                     # Python — not on PyPI yet, see
 Think SQLite, not Milvus: a library your application links against to keep vectors and metadata
 on local disk and search them. No server, no network, no daemon.
 
-> **Status: 0.1.0, the first release.** The Node, web and React Native SDKs are on npm. Nothing
-> is on PyPI or crates.io yet; [RELEASING.md](RELEASING.md) tracks what is published where. The
-> API will still change, and the on-disk format is at v2 — a v2 build reads v1 files, but
-> neither is frozen. The C ABI is. Do not put data you care about in it.
+> **Status: 0.1.0, the first release.** The Node and web SDKs are on npm and work. The React
+> Native package is on npm and **0.1.0 of it cannot be installed** — its tarball was missing the
+> Gradle module, the iOS sources and the engine itself; that is fixed in the tree and will ship
+> in the next release, and a check now refuses to publish an incomplete package. Nothing is on
+> PyPI or crates.io yet; [RELEASING.md](RELEASING.md) tracks what is published where. The API
+> will still change, and the on-disk format is at v2 — a v2 build reads v1 files, but neither is
+> frozen. The C ABI is. Do not put data you care about in it.
 
 ## Why this exists
 
@@ -92,7 +95,7 @@ Nothing at or below the public API knows which platform it is on. That is enforc
 | HNSW graph index — 9-13x faster than the SIMD scan at 0.974 recall, graph persisted | Done |
 | Web / WASM — WebAssembly module, OPFS storage verified in a browser | Done |
 | Python — ctypes over the C ABI, 19 tests | Done |
-| React Native — JSI bridge, 56 C++ checks + 11 JS tests | Built (JSI glue and packaging unverified) |
+| React Native — JSI bridge, Node-parity API, filters, batches | Built; 123 C++ checks + 45 JS tests, JSI compiled against RN 0.73 and 0.87 (platform builds unverified) |
 | Flutter | Not started |
 
 Roadmap and ordering: [docs/architecture/11-roadmap-risks-order.md](docs/architecture/11-roadmap-risks-order.md).

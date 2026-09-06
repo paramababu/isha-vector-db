@@ -125,11 +125,19 @@ fn upsert(c: *mut isha_vector_db_ffi::VdbCollection, id: &str, v: &[f32]) {
 fn version_information_is_available_without_opening_anything() {
     let v = unsafe { CStr::from_ptr(vdb_version()) }.to_str().unwrap();
     assert!(!v.is_empty());
-    // The two version numbers are deliberately independent. The C ABI is frozen at 1 and a
-    // change to it breaks every compiled caller; the on-disk format moves on its own schedule
-    // and breaks nothing that was rebuilt. Format v2 added the metadata offset table without
-    // touching a single signature, which is the whole point of keeping these apart.
-    assert_eq!(vdb_abi_version(), 1, "the C ABI is frozen");
+    // The two version numbers are deliberately independent. The C ABI moves only when a
+    // signature is added or changed; the on-disk format moves on its own schedule and breaks
+    // nothing that was rebuilt. Format v2 added the metadata offset table without touching a
+    // single signature, which is the whole point of keeping these apart.
+    //
+    // ABI 2 added `vdb_metadata_set_null`. That is additive — an old caller is unaffected, and a
+    // new one fails to link against an old library rather than misbehaving against it — but the
+    // rule in `VDB_ABI_VERSION` is that any header change bumps the revision, so it bumped.
+    assert_eq!(
+        vdb_abi_version(),
+        2,
+        "the C ABI is additive-only, and this pin moves with it"
+    );
     assert_eq!(
         vdb_format_version(),
         u32::from(isha_vector_db_format::FORMAT_VERSION)
@@ -687,6 +695,69 @@ fn filters_compose_to_arbitrary_depth() {
     unsafe { vdb_filter_unary(h, b"price".as_ptr(), 5, UNARY_EXISTS, &mut err) };
     assert_eq!(filtered_ids(c, h), vec!["hammer", "saw"]);
     unsafe { vdb_filter_free(h) };
+
+    unsafe { vdb_collection_free(c) };
+    unsafe { vdb_close(db, &mut err) };
+}
+
+/// An explicitly null field is present; an absent one is not.
+///
+/// The two are indistinguishable to every comparison — an absent field already equals null — so
+/// `EXISTS` is the only thing that can tell them apart, and it is what makes
+/// `vdb_metadata_set_null` worth having rather than letting bindings drop null-valued keys.
+#[test]
+fn an_explicitly_null_field_exists_where_an_absent_one_does_not() {
+    let dir = TempDir::new("metadata-null");
+    let db = open(&dir);
+    let c = collection(db, 2);
+    let mut err = ptr::null_mut();
+
+    // "noted" carries note = null; "silent" carries no note at all.
+    let m = vdb_metadata_new();
+    assert_eq!(
+        unsafe { vdb_metadata_set_null(m, b"note".as_ptr(), 4, &mut err) },
+        VDB_OK,
+        "{}",
+        message(err)
+    );
+    let v = [1.0f32, 0.0];
+    let rc = unsafe {
+        vdb_upsert(
+            c,
+            b"noted".as_ptr(),
+            5,
+            v.as_ptr(),
+            2,
+            m,
+            ptr::null_mut(),
+            &mut err,
+        )
+    };
+    assert_eq!(rc, VDB_OK, "{}", message(err));
+    unsafe { vdb_metadata_free(m) };
+
+    let rc = unsafe {
+        vdb_upsert(
+            c,
+            b"silent".as_ptr(),
+            6,
+            v.as_ptr(),
+            2,
+            ptr::null(),
+            ptr::null_mut(),
+            &mut err,
+        )
+    };
+    assert_eq!(rc, VDB_OK, "{}", message(err));
+
+    let f = vdb_filter_new();
+    unsafe { vdb_filter_unary(f, b"note".as_ptr(), 4, UNARY_EXISTS, &mut err) };
+    assert_eq!(
+        filtered_ids(c, f),
+        vec!["noted"],
+        "an explicit null is present; an absent field is not"
+    );
+    unsafe { vdb_filter_free(f) };
 
     unsafe { vdb_collection_free(c) };
     unsafe { vdb_close(db, &mut err) };

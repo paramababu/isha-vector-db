@@ -374,6 +374,16 @@ int32_t vdb_metadata_set_f64(vdb_metadata_t *metadata, const uint8_t *key, size_
 int32_t vdb_metadata_set_bool(vdb_metadata_t *metadata, const uint8_t *key, size_t key_len,
                               bool value, vdb_error_t **err);
 
+/*
+ * Set a field to null — explicitly null, rather than absent.
+ *
+ * No comparison can tell the two apart, since an absent field already equals null. Only
+ * VDB_UNARY_EXISTS distinguishes them, which is why this exists: a binding that dropped
+ * null-valued keys rather than calling it would quietly change what an existence test reports.
+ */
+int32_t vdb_metadata_set_null(vdb_metadata_t *metadata, const uint8_t *key, size_t key_len,
+                              vdb_error_t **err);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif

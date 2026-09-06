@@ -35,3 +35,12 @@ crates/*/fuzz/artifacts/
 
 # Node platform packages are filled in by the release workflow.
 sdk/node/npm/*/vdb.node
+
+# React Native build artefacts. include/vdb.h is copied from the FFI crate by prepack so the
+# tarball is self-contained; committing it would be a second copy of a frozen header, and the
+# copy that goes stale is always the one nobody compiles. The native libraries are per-ABI
+# binaries assembled at release time.
+sdk/react-native/include/
+sdk/react-native/android/jniLibs/
+sdk/react-native/ios/Vdb.xcframework/
+sdk/react-native/*.tgz

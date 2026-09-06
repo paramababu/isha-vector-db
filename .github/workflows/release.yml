@@ -26,6 +26,13 @@ jobs:
       - run: ./scripts/check-core-purity.sh
       - run: ./scripts/check-references.sh
 
+      # A package whose own build files name files the tarball does not contain cannot be
+      # installed by anyone. That is what shipped as 0.1.0 of the React Native SDK, and the
+      # release pipeline had nothing that would have noticed.
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - run: ./scripts/check-react-native-package.sh
+
       # The tag must match the version in Cargo.toml. Publishing v0.2.0 from a tree that says
       # 0.1.0 produces a release nobody can reproduce from the tag.
       - name: The tag matches the version
@@ -139,6 +146,47 @@ jobs:
           path: sdk/node/npm/${{ matrix.npm }}/vdb.node
 
   # ---------------------------------------------------------------------------
+  # React Native: the engine, per Android ABI and per Apple architecture.
+  #
+  # Without these the package ships its JavaScript and C++ and no engine, and an app linking
+  # against it fails at the link step. 0.1.0 shipped exactly that — along with no Gradle module
+  # and no iOS sources — and could not be installed by anybody.
+  # ---------------------------------------------------------------------------
+  react-native-android:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      # The runner image carries an NDK; naming it rather than taking whatever is newest means a
+      # runner image update cannot silently change the minimum Android version we link against.
+      - uses: nttld/setup-ndk@v1
+        id: ndk
+        with: { ndk-version: r27 }
+      - run: rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
+      - name: Build the static library for every ABI
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: ./scripts/build-react-native.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rn-android
+          path: sdk/react-native/android/jniLibs/
+
+  react-native-ios:
+    needs: verify
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios aarch64-apple-darwin
+      - run: ./scripts/build-react-native.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rn-ios
+          path: sdk/react-native/ios/Vdb.xcframework/
+
+  # ---------------------------------------------------------------------------
   # WebAssembly: one artefact for every platform, because wasm has none.
   # ---------------------------------------------------------------------------
   web:
@@ -196,7 +244,7 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@release/v1
 
   publish-npm:
-    needs: [node-addons, web]
+    needs: [node-addons, web, react-native-android, react-native-ios]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     # Trusted publishing, for the same reason publish-pypi uses it: no long-lived token in the
@@ -240,6 +288,14 @@ jobs:
 
           cp /tmp/artifacts/wasm/vdb.wasm sdk/web/vdb.wasm
           (cd sdk/web && npm publish --access public --provenance)
+
+          # The React Native package carries the engine for six architectures. prepack copies
+          # the C ABI header in; these are the parts a workflow has to place, and the check
+          # below refuses to publish a tarball missing any of them.
+          mkdir -p sdk/react-native/android/jniLibs sdk/react-native/ios/Vdb.xcframework
+          cp -R /tmp/artifacts/rn-android/. sdk/react-native/android/jniLibs/
+          cp -R /tmp/artifacts/rn-ios/. sdk/react-native/ios/Vdb.xcframework/
+          ./scripts/check-react-native-package.sh --release
           (cd sdk/react-native && npm publish --access public --provenance)
           # Last: it declares the platform packages as optional dependencies, and npm resolves
           # them at install time, so they must already exist.

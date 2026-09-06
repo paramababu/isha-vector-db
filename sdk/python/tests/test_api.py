@@ -40,7 +40,7 @@ class TestVersions(unittest.TestCase):
         v = vdb.version()
         self.assertTrue(v["library"])
         # The ABI is frozen; the on-disk format moves independently of it.
-        self.assertEqual(v["abi"], 1)
+        self.assertEqual(v["abi"], 2)
         self.assertGreaterEqual(v["format"], 1)
 
 

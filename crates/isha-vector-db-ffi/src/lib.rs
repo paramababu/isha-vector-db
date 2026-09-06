@@ -100,7 +100,13 @@ pub const VDB_INVALID_ARGUMENT: i32 = -4;
 /// Bumped on any change to this header. A binding checks it at load and refuses a mismatch —
 /// which is the difference between a clear error and a crash when an application ships a
 /// prebuilt library and an SDK that were built at different times.
-pub const VDB_ABI_VERSION: u32 = 1;
+///
+/// **2** — `vdb_metadata_set_null` was added. Additive, so a caller that never names it works
+/// against either revision; a caller that does will not link against revision 1, which is a link
+/// error rather than the silent misbehaviour this number exists to prevent. Frozen still means
+/// additive-only, not that this integer never moves: the rule above says any header change bumps
+/// it, and adding a function is a header change.
+pub const VDB_ABI_VERSION: u32 = 2;
 
 /// Similarity metric discriminants, matching `vdb_metric_t` in the header.
 const METRIC_COSINE: i32 = 1;
@@ -860,6 +866,30 @@ pub unsafe extern "C" fn vdb_metadata_set_f64(
         let m = unsafe { VdbMetadata::borrow_mut(metadata) }?;
         let key = unsafe { borrow_str(key, key_len) }?.to_owned();
         m.insert(key, Value::F64(value));
+        Ok(())
+    })
+}
+
+/// Set a field to null.
+///
+/// Explicitly null, not absent. The distinction is invisible to every comparison — an absent
+/// field already equals null — but `VDB_UNARY_EXISTS` can tell them apart, so a binding that
+/// dropped null-valued keys instead of calling this would quietly change what `$exists` reports.
+///
+/// # Safety
+/// `metadata` must be live and `key` readable.
+#[no_mangle]
+pub unsafe extern "C" fn vdb_metadata_set_null(
+    metadata: *mut VdbMetadata,
+    key: *const u8,
+    key_len: usize,
+    err: *mut *mut VdbError,
+) -> i32 {
+    guard(err, || {
+        // SAFETY: the caller guarantees the handle is live and `key` is readable.
+        let m = unsafe { VdbMetadata::borrow_mut(metadata) }?;
+        let key = unsafe { borrow_str(key, key_len) }?.to_owned();
+        m.insert(key, Value::Null);
         Ok(())
     })
 }

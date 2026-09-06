@@ -6,10 +6,19 @@ on:
   pull_request:
 
 jobs:
+  # Three layers, and it is worth being precise about what each proves:
+  #
+  #   1. vdb_bridge.cpp  compiled AND RUN against the real engine — the only one that can catch
+  #                      a wrong answer, which is why the logic lives there.
+  #   2. vdb_jsi.cpp     COMPILED against React Native's own JSI headers, at both ends of the
+  #                      supported version range. Catches a moved signature; cannot catch a
+  #                      conversion that type-checks and is wrong.
+  #   3. src/*.js        run in Node against a mock host: the filter and metadata compilers,
+  #                      batch packing, argument validation, handle-state rules.
+  #
+  # Still uncovered: the JSI layer executing, and Gradle/Xcode actually building. Those need an
+  # app. sdk/react-native/README.md says so plainly.
   bridge:
-    # The half of the native layer that can run without a device — and deliberately the half
-    # that holds the logic. cpp/vdb_jsi.cpp needs React Native's JSI headers to compile at all
-    # and is not covered here; sdk/react-native/README.md says so plainly.
     strategy:
       fail-fast: false
       matrix:
@@ -23,7 +32,18 @@ jobs:
           node-version: '22'
       - uses: Swatinem/rust-cache@v2
 
-      # Compiles vdb_bridge.cpp against the real static library and runs it: handle lifetimes,
-      # error translation, use-after-close, persistence across a reopen.
-      - name: C++ bridge and JavaScript API
+      - name: C++ bridge, JSI compile, and the JavaScript API
         run: ./scripts/test-react-native.sh
+
+  # The check that would have caught the defect in 0.1.0: a package whose own build files named
+  # four files the tarball did not contain, published to npm and installable by nobody. Needs no
+  # Android or iOS toolchain, because "the package contains what it says it contains" does not.
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: The published tarball is complete
+        run: ./scripts/check-react-native-package.sh

@@ -11,6 +11,33 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
 
 ### Fixed
 
+- **`@isais-logic/isha-vector-db-react-native` 0.1.0 could not be installed by anybody.** The
+  published tarball held nine files. It did not hold `android/build.gradle`, so React Native's
+  autolinking scanned the package, found no Android module and silently contributed nothing —
+  the bindings were never installed and `globalThis.__vdb` was never defined, whatever the app
+  did. It did not hold `android/src/main/cpp/vdb_module.cpp`, which its own `CMakeLists.txt`
+  named as a source, so CMake failed at configure time. It did not hold anything under `ios/`,
+  though the podspec globbed the directory. It did not hold `vdb.h`, which every C++ file in it
+  includes. And it did not hold the engine, for any architecture.
+
+  Every one of those is mechanically checkable from the tarball with no Android or iOS toolchain
+  anywhere near it, which is what `scripts/check-react-native-package.sh` now does: it packs the
+  package, then asserts that every file the build files name is present, that the Java class
+  `react-native.config.js` registers exists, that the shipped `vdb.h` is byte-identical to the
+  canonical one, and that no test scaffolding leaked into it. The release workflow runs it before
+  publishing anything and `--release` additionally requires the engine for all six architectures,
+  so an incomplete package now fails the release instead of reaching npm.
+
+  The missing pieces are all present: a Gradle module, the JNI entry point, `ios/Vdb.mm` and its
+  header, `react-native.config.js`, and a `prepack` step that copies the C ABI header in. The
+  platform builds themselves are still unverified — there is no Xcode or Gradle project here —
+  and every README says so.
+
+- **The React Native SDK could not write metadata or filter a search**, though its README claimed
+  filters and maintenance were done "in every SDK" and `sdk/node/index.d.ts` claimed it mirrored
+  the canonical API "exactly". It exposed nine methods; the C ABI it binds exposes thirty-eight.
+
+
 - **`@isais-logic/isha-vector-db-node` promised a platform it did not ship.** The package
   declares `linux-arm64` among its optional dependencies, but the release matrix never built
   it, so `@isais-logic/isha-vector-db-node-linux-arm64` does not exist on npm. The install
@@ -53,6 +80,62 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
   Found by the nightly fuzz run. The crash input is committed to `fuzz/corpus/value/`, and both
   directions of the tag rule are pinned by unit tests. Storage format: unchanged at v2; these
   are bytes that were never valid.
+
+### Added
+
+- **`vdb_metadata_set_null`** in the C ABI, and **`vdb_abi_version()` is now 2**. `Value::Null`
+  was expressible by every binding that talks to the engine directly (Node, Java) and by none
+  that goes through the C ABI (Swift, React Native), which had to drop null-valued keys. No
+  comparison can tell an explicit null from an absent field — an absent field already equals null
+  — but `VDB_UNARY_EXISTS` can, so dropping the key quietly changed what an existence test
+  reported.
+
+  This is the first additive change since the boundary was frozen, and the first exercise of the
+  rule that governs it: the revision is *"bumped on any change to this header"*, and adding a
+  function is a change to the header. Frozen means additive-only, not that the integer never
+  moves — `ci-abi.yml` enforces the rule and refused this change until the number moved.
+
+  **Nothing breaks.** A caller that never names `vdb_metadata_set_null` works against either
+  revision; one that does will fail to *link* against revision 1, which is a build error rather
+  than the silent misbehaviour the number exists to prevent. No SDK enforces a version match at
+  load today — each merely reports it — so the practical effect on existing consumers is nil.
+  The pins in the Rust, C++, Swift, Python and web test suites moved with it.
+
+- **The React Native SDK now mirrors the canonical JavaScript API.** Metadata on write, query-
+  object filters, batch upserts, `stats`, `compact`, `verify`, `openCollection`,
+  `dropCollection`, database-wide `flush`, a durability option, `Symbol.dispose`, and TypeScript
+  declarations. Same names, argument order, defaults and error codes as
+  `@isais-logic/isha-vector-db-node`, which is what that package's declarations already promised
+  on its behalf.
+
+  Filters are compiled to the C ABI's postfix form **in JavaScript**, in `src/filter.js`, for the
+  same reason the rest of the logic is in `vdb_bridge.cpp`: it is the half that can be tested
+  without a device. An incomplete sequence — one that would search with a clause silently missing,
+  returning documents the caller asked to exclude — is refused before it reaches the engine, in
+  both layers.
+
+- **`cpp/vdb_jsi.cpp` is compiled by CI**, against React Native's own JSI headers, at both ends of
+  the supported version range (0.73 and the current release). It was previously not built by
+  anything. Compiling is not running, and the file is still deliberately branch-free for that
+  reason, but a moved signature or a conversion that does not type-check now breaks the build
+  instead of a device. Addresses R6 in the risk register.
+
+- **`scripts/build-react-native.sh`**, which assembles the engine into the package for three
+  Android ABIs and three Apple architectures, and skips whichever toolchain it cannot find.
+
+### Changed
+
+- **The React Native tarball is a third smaller.** The static archives it ships are stripped of
+  debug information — 158 MB unpacked to 103 MB, 47 MB packed to 35 MB. The package carries every
+  architecture because an app's build chooses them and npm's `os`/`cpu` resolution cannot help,
+  so every React Native developer downloads all of it. The 43 exported symbols are global and
+  survive stripping; only debug and local symbols go.
+
+- **The React Native API changed shape**, following the Node SDK: `db.collection(name, {
+  dimension, metric })` rather than three positional arguments, string metrics (`'cosine'`)
+  rather than a `Metric` enum, and `contains` rather than `has`. Breaking, and taken without a
+  deprecation because the only published version of this package cannot be installed, so nothing
+  can be depending on it. `sdk/react-native/README.md` has the table.
 
 ## [0.1.0] — 2026-08-23
 

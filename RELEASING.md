@@ -51,7 +51,7 @@ a release nobody can reproduce from the tag.
 `1.0.0`: that would promise the API and the storage format are settled, and neither is.
 
 Four things are versioned separately and deliberately (see the changelog's header): the library,
-the **storage format** (an integer, currently 2), the **C ABI** (an integer, frozen at 1), and the
+the **storage format** (an integer, currently 2), the **C ABI** (an integer, additive-only, at 2), and the
 SDK packages. Only the library version goes in the tag.
 
 ## Releasing
