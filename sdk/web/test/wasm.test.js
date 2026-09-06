@@ -32,8 +32,8 @@ test('reports its versions', async () => {
   try {
     const vdb = await engine(s.dir);
     assert.ok(vdb.version.length > 0);
-    // The ABI is frozen at 1; the on-disk format moves independently.
-    assert.equal(vdb.abiVersion, 1);
+    // The ABI is additive-only at 2; the on-disk format moves independently.
+    assert.equal(vdb.abiVersion, 2);
     assert.ok(vdb.formatVersion >= 1);
     vdb.dispose();
   } finally {

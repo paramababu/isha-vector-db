@@ -83,12 +83,23 @@ integer), the **ABI** (an integer), and the **SDK packages**. Entries state whic
 
 ### Added
 
-- **`vdb_metadata_set_null`** in the C ABI. `Value::Null` was expressible by every binding that
-  talks to the engine directly (Node, Java) and by none that goes through the C ABI (Swift, React
-  Native), which had to drop null-valued keys. No comparison can tell an explicit null from an
-  absent field — an absent field already equals null — but `VDB_UNARY_EXISTS` can, so dropping
-  the key quietly changed what an existence test reported. Additive: the ABI stays frozen at
-  version 1.
+- **`vdb_metadata_set_null`** in the C ABI, and **`vdb_abi_version()` is now 2**. `Value::Null`
+  was expressible by every binding that talks to the engine directly (Node, Java) and by none
+  that goes through the C ABI (Swift, React Native), which had to drop null-valued keys. No
+  comparison can tell an explicit null from an absent field — an absent field already equals null
+  — but `VDB_UNARY_EXISTS` can, so dropping the key quietly changed what an existence test
+  reported.
+
+  This is the first additive change since the boundary was frozen, and the first exercise of the
+  rule that governs it: the revision is *"bumped on any change to this header"*, and adding a
+  function is a change to the header. Frozen means additive-only, not that the integer never
+  moves — `ci-abi.yml` enforces the rule and refused this change until the number moved.
+
+  **Nothing breaks.** A caller that never names `vdb_metadata_set_null` works against either
+  revision; one that does will fail to *link* against revision 1, which is a build error rather
+  than the silent misbehaviour the number exists to prevent. No SDK enforces a version match at
+  load today — each merely reports it — so the practical effect on existing consumers is nil.
+  The pins in the Rust, C++, Swift, Python and web test suites moved with it.
 
 - **The React Native SDK now mirrors the canonical JavaScript API.** Metadata on write, query-
   object filters, batch upserts, `stats`, `compact`, `verify`, `openCollection`,

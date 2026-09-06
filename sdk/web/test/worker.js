@@ -28,7 +28,7 @@ async function main() {
   const wasm = await fetch(new URL('../vdb.wasm', import.meta.url));
   const vdb = await load(wasm, adapter);
 
-  check(vdb.abiVersion === 1, `ABI version is 1 (got ${vdb.abiVersion})`);
+  check(vdb.abiVersion === 2, `ABI version is 2 (got ${vdb.abiVersion})`);
   report(true, `format version ${vdb.formatVersion}, library ${vdb.version}`);
 
   const db = vdb.open('/db');

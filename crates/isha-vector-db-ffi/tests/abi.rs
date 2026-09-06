@@ -125,11 +125,19 @@ fn upsert(c: *mut isha_vector_db_ffi::VdbCollection, id: &str, v: &[f32]) {
 fn version_information_is_available_without_opening_anything() {
     let v = unsafe { CStr::from_ptr(vdb_version()) }.to_str().unwrap();
     assert!(!v.is_empty());
-    // The two version numbers are deliberately independent. The C ABI is frozen at 1 and a
-    // change to it breaks every compiled caller; the on-disk format moves on its own schedule
-    // and breaks nothing that was rebuilt. Format v2 added the metadata offset table without
-    // touching a single signature, which is the whole point of keeping these apart.
-    assert_eq!(vdb_abi_version(), 1, "the C ABI is frozen");
+    // The two version numbers are deliberately independent. The C ABI moves only when a
+    // signature is added or changed; the on-disk format moves on its own schedule and breaks
+    // nothing that was rebuilt. Format v2 added the metadata offset table without touching a
+    // single signature, which is the whole point of keeping these apart.
+    //
+    // ABI 2 added `vdb_metadata_set_null`. That is additive — an old caller is unaffected, and a
+    // new one fails to link against an old library rather than misbehaving against it — but the
+    // rule in `VDB_ABI_VERSION` is that any header change bumps the revision, so it bumped.
+    assert_eq!(
+        vdb_abi_version(),
+        2,
+        "the C ABI is additive-only, and this pin moves with it"
+    );
     assert_eq!(
         vdb_format_version(),
         u32::from(isha_vector_db_format::FORMAT_VERSION)

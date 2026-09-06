@@ -100,7 +100,13 @@ pub const VDB_INVALID_ARGUMENT: i32 = -4;
 /// Bumped on any change to this header. A binding checks it at load and refuses a mismatch —
 /// which is the difference between a clear error and a crash when an application ships a
 /// prebuilt library and an SDK that were built at different times.
-pub const VDB_ABI_VERSION: u32 = 1;
+///
+/// **2** — `vdb_metadata_set_null` was added. Additive, so a caller that never names it works
+/// against either revision; a caller that does will not link against revision 1, which is a link
+/// error rather than the silent misbehaviour this number exists to prevent. Frozen still means
+/// additive-only, not that this integer never moves: the rule above says any header change bumps
+/// it, and adding a function is a header change.
+pub const VDB_ABI_VERSION: u32 = 2;
 
 /// Similarity metric discriminants, matching `vdb_metric_t` in the header.
 const METRIC_COSINE: i32 = 1;

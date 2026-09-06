@@ -68,8 +68,8 @@ std::vector<float> vector_for(int i, std::uint32_t dimension) {
 void versions() {
   std::printf("versions\n");
   check(!vdb::Bridge::version().empty(), "the library reports a version");
-  // The ABI is frozen at 1; the on-disk format moves independently of it.
-  check(vdb::Bridge::abi_version() == 1, "the C ABI version is 1");
+  // The ABI is additive-only at 2; the on-disk format moves independently of it.
+  check(vdb::Bridge::abi_version() == 2, "the C ABI version is 2");
   check(vdb::Bridge::format_version() >= 1, "the format version is at least 1");
 }
 

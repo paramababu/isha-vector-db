@@ -122,7 +122,7 @@ checks worth adding first are the ones that would have caught what actually ship
 | 40 | Filter and metadata compilers written in JavaScript rather than C++, with 45 tests | The postfix flattening a C-ABI binding cannot avoid is testable without a device; an unbalanced filter is refused before it reaches the engine |
 | 41 | `vdb_jsi.cpp` compiled against React Native's own JSI headers at both ends of the supported range | The file that was previously "not covered by CI at all" now breaks the build when a signature moves ([R6](#112-major-technical-risks-and-mitigations)) |
 | 42 | `scripts/check-react-native-package.sh` — the tarball contains every file its own build files name, and the engine for every architecture it claims | The 0.1.0 failure, mechanically, with no mobile toolchain. Gates the release |
-| 43 | `vdb_metadata_set_null` added to the C ABI | The one metadata type Node and Java could express and the two C-ABI SDKs could not. Additive, so the ABI stays frozen at 1 |
+| 43 | `vdb_metadata_set_null` added to the C ABI, and `vdb_abi_version()` bumped to 2 | The one metadata type Node and Java could express and the two C-ABI SDKs could not. The first additive change since the freeze, and the first exercise of the rule that any header change bumps the revision |
 | 44 | Debug information stripped from the shipped archives | 158 MB unpacked to 103 MB, on a package every React Native developer downloads in full ([R10](#112-major-technical-risks-and-mitigations)) |
 
 ### Next, in order
