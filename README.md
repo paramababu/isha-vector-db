@@ -22,13 +22,13 @@ pip install isha-vector-db                     # Python — not on PyPI yet, see
 Think SQLite, not Milvus: a library your application links against to keep vectors and metadata
 on local disk and search them. No server, no network, no daemon.
 
-> **Status: 0.1.0, the first release.** The Node and web SDKs are on npm and work. The React
-> Native package is on npm and **0.1.0 of it cannot be installed** — its tarball was missing the
-> Gradle module, the iOS sources and the engine itself; that is fixed in the tree and will ship
-> in the next release, and a check now refuses to publish an incomplete package. Nothing is on
-> PyPI or crates.io yet; [RELEASING.md](RELEASING.md) tracks what is published where. The API
-> will still change, and the on-disk format is at v2 — a v2 build reads v1 files, but neither is
-> frozen. The C ABI is. Do not put data you care about in it.
+> **Status: 0.2.0.** The Node, web and React Native SDKs are on npm. React Native 0.1.0 could
+> not be installed at all — its tarball was missing the Gradle module, the iOS sources and the
+> engine itself — so **use 0.2.0 or later**; a check now refuses to publish an incomplete
+> package. Nothing is on PyPI or crates.io yet; [RELEASING.md](RELEASING.md) tracks what is
+> published where. The API will still change, and the on-disk format is at v2 — a v2 build reads
+> v1 files, but neither is frozen. The C ABI is additive-only, at revision 2. Do not put data you
+> care about in it.
 
 ## Why this exists
 

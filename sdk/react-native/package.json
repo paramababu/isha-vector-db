@@ -1,6 +1,6 @@
 {
   "name": "@isais-logic/isha-vector-db-react-native",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "isha-vector-db for React Native: the embedded vector database, over JSI.",
   "type": "module",
   "main": "src/native.js",
